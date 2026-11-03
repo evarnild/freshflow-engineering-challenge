@@ -3,10 +3,111 @@
 
 verdict: escalate
 tier: reviewed
-reviewed-commit: 47d7edd45391119a85ea9a77bb7a2e084b8a6083
-round: 2
+reviewed-commit: 618b1d6
+round: 3
 sampled: no
 live-check: owed
+
+**Tier and what set it:** unchanged from round 2. The path table sets
+Reviewed, and `review_tier: reviewed` agrees.
+
+**Verdict in short:**
+- **No finding needs rework.**
+- **What this round covers:** the owner's decision on round-2 MEDIUM 1
+  (refuse a file with zero accepted rows, spec B3 as amended), plus round-2
+  LOWs 3 and 4. All three are done and their new lines are proven by
+  mutants.
+- **Still owed:** the owner's diff read and live check.
+
+Scope: a small re-review of the round-3 commits 1cf89c5 and 618b1d6 (the
+diff from 47d7edd). The coordinator did it inline; no reviewer agent ran.
+
+## Passes
+| # | Pass | Result |
+| --- | --- | --- |
+| 1 | Intent and plan match | pass. The change implements the amended B3, which the owner asked for |
+| 2 | Type check | FAIL. Its only error is the owed live check, the owner's to clear |
+| 3 | Behaviour against the spec | pass. A zero-accepted file gives 422 and keeps the old dataset (the reviewer's broken-items case is tested). Autoload stays empty. For recommendations the count is taken after I6. The provided data still loads (AC5) |
+| 4 | Tests prove the behaviour | pass. 7 mutants: 6 killed and 1 equivalent (below) |
+| 5 | Conventions | pass. The refusal lives in the pure `load_dataset` |
+| 6 | Numbers in prose | pass. The BOM claim in Progress is now true: `ingest.py:240` holds the `﻿` escape (checked with `od`) |
+| 7 | Documentation | pass. The README error list and `MAX_UPLOAD_BYTES` text are updated |
+| 8 | Guardrails and hygiene | pass. ruff is clean |
+| 9 | Repository-specific footguns | pass |
+
+## Findings
+
+### LOW (worth a look)
+1. **Process: not tests-first.**
+   - **What's wrong:** the implementer says it wrote the refusal code before
+     its tests, so the new tests were never seen failing. The coordinator
+     covered the gap with mutants: removing the refusal, `== 0 → < 0`, and
+     skipping the last file are all killed.
+   - **Side effect:** about 22 existing tests had to add a valid "spare"
+     row, because a file holding only one bad row is now refused. They
+     still assert their drop counts (`bad_item_number`, `bad_date`, …), so
+     each still proves its rule.
+2. **Carried over:**
+   - finding 12, the stale kit text;
+   - finding 16, quantities served as floats;
+   - finding 18, image tags pinned instead of digests;
+   - finding 19, `hatchling` missing from the dependency table;
+   - the minor edge cases in finding 13;
+   - the 413 status, still missing from spec B3 (the owner's call).
+
+### Equivalent mutant
+- `api.py`: `value = 0 → -1` on a parse failure. Any non-positive value
+  takes the same fallback.
+
+## Not checked
+- **Docker:** this round wasn't re-run in Docker by anyone. Round 2's
+  container evidence predates the change.
+- **The under-2 s load:** still unmeasured on an idle machine.
+- **Concurrent POST and GET under load.**
+- **The owner's AC6 run.**
+
+## Live check
+- **owed:** rule 1. The steps and expected results are the same as round
+  2's (below).
+- **Addition:** re-upload with a header-only items file:
+  ```
+  head -1 data/items.csv > /tmp/empty_items.csv
+  curl -F items=@/tmp/empty_items.csv -F orderable_items=@data/orderable_items.csv -F inventory=@data/inventory.csv -F order_recommendations=@data/order_recommendations.csv localhost:8000/data
+  ```
+  You should see 422 with `"no rows accepted after cleaning"` naming
+  `items`. The store_a query afterwards should still return 51 named rows.
+
+## Verified myself vs. taken on trust
+
+**Coordinator:**
+- `git diff 47d7edd..HEAD`: read for `src/` and `tests/test_ingest.py`.
+- `npm run verify`: green (kit 60, ruff clean, "122 passed, 1 warning").
+- `npm run check:intent`: FAIL, and its only error is the owed live check.
+- **Mutants,** each with a byte backup and restore and `pytest -x`:
+  - **Killed:**
+    - the refusal → `if False`;
+    - `== 0 → < 0`;
+    - only the first 3 files checked;
+    - `value <= 0 → < 0`;
+    - the warning log removed;
+    - the BOM `lstrip` removed (1 failed).
+  - **Equivalent:** `value = 0 → -1`.
+- `od` on the BOM line: the escape is present, not the literal.
+- `git status --short`: clean afterwards.
+
+**Taken on trust:** the implementer's report that only the listed tests
+changed. Spot-checked in the diff.
+
+# Round 2 (history)
+
+- verdict: escalate
+- tier: reviewed
+- reviewed-commit: 47d7edd45391119a85ea9a77bb7a2e084b8a6083
+- round: 2
+- sampled: no
+- live-check: owed
+
+MEDIUM 1, LOW 3 and LOW 4 are resolved in round 3 above.
 
 **Tier and what set it:** the path table sets Reviewed (the change touches
 `REVIEW-POLICY.md`, `scripts/intent-check-lib.mjs` and
@@ -20,7 +121,7 @@ agrees.
 - **Your decisions:** one new MEDIUM (an upload whose rows are all dropped
   still replaces the data) and one spec amendment (the 413 response).
 
-## Passes
+### Passes
 | # | Pass | Result |
 | --- | --- | --- |
 | 1 | Intent and plan match | findings (1). The 413 status is not in spec B3; it needs an owner amendment |
@@ -33,14 +134,14 @@ agrees.
 | 8 | Guardrails and hygiene | pass. ruff is clean and no dependency was added |
 | 9 | Repository-specific footguns | pass. The list is still empty; the two round-1 proposals stand |
 
-## Type check
+### Type check
 ```
 type-check: FAIL (intent 1, feature)
   error: A live check is owed and not recorded. Do the steps in intents/1-order-recommendations-service/review.md → ## Live check, then set live_checked: <date> in intents/1-order-recommendations-service/metadata.yml.
   note:  26 file(s), 79196 line(s) changed outside intents/.
 ```
 
-## Round-1 findings: resolution
+### Round-1 findings: resolution
 
 The reviewer re-ran every round-1 surviving mutant at the same lines as
 they now stand:
@@ -66,7 +167,7 @@ they now stand:
 remaining edges in 13. The surviving mutants for those edges are
 `ingest:161`, `:192`, `:226`, `:239` (blank rows), `:242` and `:266`.
 
-## Findings
+### Findings
 
 ### MEDIUM
 1. **`src/freshflow/api.py:158` / `load_dataset`: a structurally valid upload
@@ -103,7 +204,7 @@ remaining edges in 13. The surviving mutants for those edges are
 5. **Carried over:** findings 12, 16, 18 and 19, and the edges in 13, from
    round 1.
 
-## Not checked
+### Not checked
 - **The spec's full load in under 2 s:** not measurable this round. An
   unrelated transcription job (PID 21260, started 21:27) holds the CPU at
   100%. Under that load, `load_dataset` takes about 8 s both at 41b91d7 and
@@ -116,7 +217,7 @@ remaining edges in 13. The surviving mutants for those edges are
   configures the root logger.
 - **The owner's run of AC6 on their own machine.**
 
-## Live check
+### Live check
 - **owed:** rule 1. The diff touches `src/freshflow/api.py`, `Dockerfile`,
   `pyproject.toml` and `uv.lock`.
 - **steps:** run these from the repository root on the branch (the
@@ -151,7 +252,7 @@ remaining edges in 13. The surviving mutants for those edges are
     store_a query still returns 51 rows;
   - `/docs` lists all five endpoints.
 
-## Verified myself vs. taken on trust
+### Verified myself vs. taken on trust
 
 **Coordinator:**
 - `npm run verify`: green (kit 60, ruff clean, pytest "109 passed, 1
