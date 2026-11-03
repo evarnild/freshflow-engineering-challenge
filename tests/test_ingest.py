@@ -16,6 +16,34 @@ from freshflow.ingest import LoadError, load_dataset
 D = date(2024, 3, 5)
 
 
+SPARE = {
+    "items": "1002,Apples,Fruits,True,1,2",
+    "orderable": ord_row(item="1002"),
+    "inventory": inv_row(item="1002"),
+    "recs": rec_row(item="1002"),
+}
+
+
+def spare(**kw):
+    """make_files plus one valid item-1002 row per file, so no file cleans to nothing."""
+    rows = {
+        "items": [ITEM_1001],
+        "orderable": [ord_row()],
+        "inventory": [inv_row()],
+        "recs": [rec_row()],
+    }
+    rows.update({k: list(v) for k, v in kw.items()})
+    return make_files(**{k: [*v, SPARE[k]] for k, v in rows.items()})
+
+
+def no_1001(keyed):
+    return not any(k[1] == 1001 for k in keyed)
+
+
+def served_items(ds):
+    return {r.item_number for rs in ds.recommendations.values() for r in rs}
+
+
 def counts(report, file):
     return report.files[file].counts
 
@@ -43,8 +71,8 @@ def test_i1_store_ids_are_stripped_and_lowercased():
 
 
 def test_i1_empty_store_id_drops_row():
-    ds, rep = load_dataset(make_files(inventory=[inv_row(store="  ")]))
-    assert ds.inventory == {}
+    ds, rep = load_dataset(spare(inventory=[inv_row(store="  ")]))
+    assert no_1001(ds.inventory)
     assert counts(rep, "inventory")["bad_store"] == 1
 
 
@@ -57,8 +85,8 @@ def test_i2_integral_float_item_number_becomes_int():
 
 @pytest.mark.parametrize("bad", ["abc", "1001.5", ""])
 def test_i2_bad_item_number_drops_row(bad):
-    ds, rep = load_dataset(make_files(recs=[rec_row(item=bad)]))
-    assert ds.recommendations == {}
+    ds, rep = load_dataset(spare(recs=[rec_row(item=bad)]))
+    assert 1001 not in served_items(ds)
     assert counts(rep, "order_recommendations")["bad_item_number"] == 1
     assert rep.files["order_recommendations"].examples["bad_item_number"]
 
@@ -72,8 +100,8 @@ def test_i3_day_first_slash_date_is_accepted():
 
 @pytest.mark.parametrize("bad", ["2024-13-01", "31/02/2024", "garbage", "03-05-2024"])
 def test_i3_bad_date_drops_row(bad):
-    ds, rep = load_dataset(make_files(inventory=[inv_row(day=bad)]))
-    assert ds.inventory == {}
+    ds, rep = load_dataset(spare(inventory=[inv_row(day=bad)]))
+    assert no_1001(ds.inventory)
     assert counts(rep, "inventory")["bad_date"] == 1
 
 
@@ -88,16 +116,16 @@ def test_i4_exact_duplicates_collapse_after_normalisation():
 
 
 def test_i4_conflicting_duplicates_are_all_dropped():
-    f = make_files(inventory=[inv_row(qty="5"), inv_row(qty="6")])
+    f = spare(inventory=[inv_row(qty="5"), inv_row(qty="6")])
     ds, rep = load_dataset(f)
-    assert ds.inventory == {}
+    assert no_1001(ds.inventory)
     assert counts(rep, "inventory")["conflicting_duplicate"] == 2
 
 
 def test_i4_conflicting_recommendations_drop_all_and_nothing_is_served():
-    f = make_files(recs=[rec_row(qty="5"), rec_row(qty="6")])
+    f = spare(recs=[rec_row(qty="5"), rec_row(qty="6")])
     ds, rep = load_dataset(f)
-    assert ds.recommendations == {}
+    assert 1001 not in served_items(ds)
     assert counts(rep, "order_recommendations")["conflicting_duplicate"] == 2
 
 
@@ -124,9 +152,9 @@ def test_i6_recommendation_without_orderable_row_is_dropped():
 
 
 def test_i6_recommendation_with_different_delivery_day_is_dropped():
-    f = make_files(recs=[rec_row(delivery="2024-03-09")])
+    f = spare(recs=[rec_row(delivery="2024-03-09")])
     ds, rep = load_dataset(f)
-    assert ds.recommendations == {}
+    assert 1001 not in served_items(ds)
     assert counts(rep, "order_recommendations")["not_orderable"] == 1
 
 
@@ -151,9 +179,9 @@ def test_i8_trailing_empty_extra_field_is_ignored():
 
 
 def test_i8_non_empty_extra_field_drops_row():
-    f = make_files(orderable=[ord_row() + ",surprise"])
+    f = spare(orderable=[ord_row() + ",surprise"])
     ds, rep = load_dataset(f)
-    assert ds.orderable == {}
+    assert no_1001(ds.orderable)
     assert counts(rep, "orderable_items")["extra_fields"] == 1
 
 
@@ -178,9 +206,9 @@ def test_i8_tags_and_categories_are_normalised():
 
 
 def test_short_row_is_dropped():
-    f = make_files(inventory=["store_a,1001"])
+    f = spare(inventory=["store_a,1001"])
     ds, rep = load_dataset(f)
-    assert ds.inventory == {}
+    assert no_1001(ds.inventory)
     assert counts(rep, "inventory")["short_row"] == 1
 
 
@@ -191,14 +219,14 @@ def test_i9_fractional_inventory_is_kept():
 
 
 def test_i9_negative_inventory_drops_row():
-    ds, rep = load_dataset(make_files(inventory=[inv_row(qty="-1")]))
-    assert ds.inventory == {}
+    ds, rep = load_dataset(spare(inventory=[inv_row(qty="-1")]))
+    assert no_1001(ds.inventory)
     assert counts(rep, "inventory")["negative_inventory"] == 1
 
 
 def test_non_numeric_quantity_drops_row():
-    ds, rep = load_dataset(make_files(inventory=[inv_row(qty="lots")]))
-    assert ds.inventory == {}
+    ds, rep = load_dataset(spare(inventory=[inv_row(qty="lots")]))
+    assert no_1001(ds.inventory)
     assert counts(rep, "inventory")["bad_number"] == 1
 
 
@@ -237,15 +265,15 @@ def test_empty_file_raises_load_error():
 
 def test_examples_are_capped_at_five():
     rows = [inv_row(item=f"x{i}") for i in range(9)]
-    _, rep = load_dataset(make_files(inventory=rows))
+    _, rep = load_dataset(spare(inventory=rows))
     assert counts(rep, "inventory")["bad_item_number"] == 9
     assert len(rep.files["inventory"].examples["bad_item_number"]) == 5
 
 
 def test_conflicting_items_are_all_dropped():
-    f = make_files(items=[ITEM_1001, ITEM_1001.replace("False", "True")])
+    f = spare(items=[ITEM_1001, ITEM_1001.replace("False", "True")])
     ds, rep = load_dataset(f)
-    assert ds.items == {}
+    assert 1001 not in ds.items
     assert counts(rep, "items")["conflicting_duplicate"] == 2
 
 
@@ -269,9 +297,9 @@ def test_oversized_field_is_a_load_error_not_a_csv_error():
 
 @pytest.mark.parametrize("bad", ["nan", "inf", "-inf"])
 def test_non_finite_quantities_drop_the_row(bad):
-    ds, rep = load_dataset(make_files(inventory=[inv_row(qty=bad)], recs=[rec_row(qty=bad)]))
-    assert ds.inventory == {}
-    assert ds.recommendations == {}
+    ds, rep = load_dataset(spare(inventory=[inv_row(qty=bad)], recs=[rec_row(qty=bad)]))
+    assert no_1001(ds.inventory)
+    assert 1001 not in served_items(ds)
     assert counts(rep, "inventory")["bad_number"] == 1
     assert counts(rep, "order_recommendations")["bad_number"] == 1
 
@@ -296,3 +324,36 @@ def test_report_tallies_inventory_missing_and_missing_catalog_flags():
     )
     _, rep = load_dataset(f)
     assert rep.flags == {"missing_catalog_entry": 1, "inventory_missing": 1}
+
+
+@pytest.mark.parametrize(
+    "kwargs, file",
+    [
+        ({"items": ["1001,Bananas"]}, "items"),
+        ({"orderable": [ord_row(item="x")]}, "orderable_items"),
+        ({"inventory": [inv_row(qty="lots")]}, "inventory"),
+        ({"recs": [rec_row(item="x")]}, "order_recommendations"),
+    ],
+)
+def test_a_file_that_cleans_to_zero_rows_is_refused_naming_it(kwargs, file):
+    with pytest.raises(LoadError) as e:
+        load_dataset(make_files(**kwargs))
+    assert e.value.file == file
+    assert "no rows accepted" in e.value.message
+    assert "1 read" in e.value.message
+    assert "short_row" in e.value.message or "bad_" in e.value.message
+
+
+def test_a_header_only_file_is_refused():
+    f = make_files()
+    f["inventory"] = "store_id,item_number,day,quantity\n"
+    with pytest.raises(LoadError) as e:
+        load_dataset(f)
+    assert e.value.file == "inventory"
+
+
+def test_recommendations_all_dropped_by_the_orderable_check_are_refused():
+    with pytest.raises(LoadError) as e:
+        load_dataset(make_files(recs=[rec_row(item="9901")]))
+    assert e.value.file == "order_recommendations"
+    assert "not_orderable" in e.value.message

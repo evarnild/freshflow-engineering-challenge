@@ -34,7 +34,7 @@ curl localhost:8000/data/report
 
 | Endpoint | What |
 | --- | --- |
-| `POST /data` | multipart upload with the fields `items`, `orderable_items`, `inventory`, `order_recommendations`. 200 returns the load report. 422 names the file and the problem (including malformed CSV and non-UTF-8 bytes); 413 if a file exceeds the cap; the previous dataset stays |
+| `POST /data` | multipart upload with the fields `items`, `orderable_items`, `inventory`, `order_recommendations`. 200 returns the load report. 422 names the file and the problem (a missing file or column, malformed CSV, non-UTF-8 bytes, or a file in which no row survives cleaning, with that file's rows read and drop counts); 413 if a file exceeds the cap; the previous dataset stays |
 | `GET /stores/{store_id}/recommendations?day=YYYY-MM-DD` | recommendations whose **ordering day** is `day` (strict ISO date), sorted by item number. Store id is case and whitespace insensitive. A store is "known" if it has at least one valid recommendation on any day. 404 unknown store, 200 with an empty list when the store has nothing that day, 422 bad `day`, 503 before any data is loaded |
 | `GET /stores` | loaded stores with first and last ordering day |
 | `GET /data/report` | the last load report |
@@ -46,8 +46,9 @@ Each recommendation carries `item_number`, `name`, `category`, `is_bio`,
 the ordering day or null), prices, `profit_margin`, `tags` and `flags`.
 
 `DATA_DIR` (default `/app/data`) is where startup autoload looks. Set it empty
-to start with no data. `MAX_UPLOAD_BYTES` (default 52428800, 50 MB) caps each
-uploaded file; larger uploads get 413 and change nothing.
+to start with no data. `MAX_UPLOAD_BYTES` (default 52428800, 50 MB; a missing,
+non-numeric or non-positive value falls back to the default with a warning)
+caps each uploaded file, and a file of exactly that size is accepted; larger uploads get 413 and change nothing.
 
 ## Develop
 

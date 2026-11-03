@@ -237,7 +237,7 @@ def _read(name: str, text: str | None) -> tuple[list[str], list[list[str]]]:
     if text is None:
         raise LoadError(name, "file is missing")
     try:
-        rows = [r for r in csv.reader(io.StringIO(text.lstrip("﻿"), newline="")) if r]
+        rows = [r for r in csv.reader(io.StringIO(text.lstrip("\ufeff"), newline="")) if r]
     except csv.Error as e:
         raise LoadError(name, f"not valid CSV: {e}") from None
     if not rows:
@@ -386,6 +386,14 @@ def load_dataset(files: Mapping[str, str]) -> tuple[Dataset, LoadReport]:
         else:
             kept.append(r)
     fr.rows_accepted = len(kept)
+
+    for name, file_report in report.files.items():  # a file that cleans to nothing is refused
+        if file_report.rows_accepted == 0:
+            raise LoadError(
+                name,
+                f"no rows accepted after cleaning ({file_report.rows_read} read; "
+                f"counts: {dict(sorted(file_report.counts.items()))})",
+            )
 
     inventory_by_key = {(i.store_id, i.item_number, i.day): i.quantity for i in inventory}
     items_by_no = {i.item_number: i for i in items}

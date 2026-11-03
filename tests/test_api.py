@@ -242,3 +242,47 @@ def test_upload_over_the_size_cap_is_413_and_keeps_old_data(loaded, monkeypatch)
     assert r.status_code == 413
     monkeypatch.delenv("MAX_UPLOAD_BYTES")
     assert loaded.get(URL, params={"day": "2024-03-05"}).json()["count"] == 1
+
+
+# ---- round 3: zero accepted rows, upload-size setting
+
+
+def test_upload_whose_items_file_cleans_to_nothing_is_422_and_keeps_old_data(loaded):
+    bad = make_files()
+    bad["items"] = "item_number,name,category,is_bio,purchase_price,suggested_retail_price\nx,y\n"
+    r = upload(loaded, bad)
+    assert r.status_code == 422
+    assert "items" in r.text and "no rows accepted" in r.text and "short_row" in r.text
+    body = loaded.get(URL, params={"day": "2024-03-05"}).json()
+    assert body["recommendations"][0]["name"] == "Bananas"
+
+
+def test_autoload_that_cleans_to_nothing_leaves_service_empty(tmp_path, monkeypatch, caplog):
+    write_dataset(tmp_path)
+    (tmp_path / "items.csv").write_text(
+        "item_number,name,category,is_bio,purchase_price,suggested_retail_price\nx,y\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    with caplog.at_level("INFO", logger="freshflow"), TestClient(create_app()) as c:
+        assert c.get("/health").json()["data_loaded"] is False
+    assert "no rows accepted" in caplog.text
+
+
+@pytest.mark.parametrize("value", ["abc", "0", "-5", ""])
+def test_invalid_max_upload_bytes_falls_back_to_default_with_a_warning(
+    loaded, monkeypatch, caplog, value
+):
+    monkeypatch.setenv("MAX_UPLOAD_BYTES", value)
+    with caplog.at_level("WARNING", logger="freshflow"):
+        assert upload(loaded, make_files()).status_code == 200
+    assert "invalid MAX_UPLOAD_BYTES" in caplog.text
+
+
+def test_upload_exactly_at_the_limit_is_accepted_and_one_over_is_refused(loaded, monkeypatch):
+    files = make_files()
+    biggest = max(len(v.encode()) for v in files.values())
+    monkeypatch.setenv("MAX_UPLOAD_BYTES", str(biggest))
+    assert upload(loaded, files).status_code == 200
+    monkeypatch.setenv("MAX_UPLOAD_BYTES", str(biggest - 1))
+    assert upload(loaded, files).status_code == 413

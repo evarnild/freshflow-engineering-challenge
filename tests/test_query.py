@@ -17,7 +17,7 @@ def test_sorted_by_item_number_with_catalog_join():
     ds = build(
         items=["1001,Bananas,Fruits,False,9.99,19.99", "1002,Apples,Fruits,True,1,2"],
         orderable=[ord_row(item="1002", tags="new"), ord_row(item="1001")],
-        inventory=[],
+        inventory=[inv_row(day="2024-03-06")],
         recs=[rec_row(item="1002"), rec_row(item="1001")],
     )
     views = recommendations_for(ds, "store_a", D)
@@ -39,7 +39,7 @@ def test_inventory_is_joined_on_the_ordering_day():
 
 
 def test_missing_inventory_is_null_and_flagged():
-    (v,) = recommendations_for(build(inventory=[]), "store_a", D)
+    (v,) = recommendations_for(build(inventory=[inv_row(day="2024-03-06")]), "store_a", D)
     assert v.inventory_quantity is None
     assert "inventory_missing" in v.flags
 

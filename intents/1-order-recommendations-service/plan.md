@@ -226,3 +226,28 @@ text in `intents/README.md` and `docs/sdlc-grid.md`, `/grid` refreshes it),
 table). The other edge gaps in 13 (`_day` whitespace, loose ISO regex,
 `bad_bool`, blank rows, header strip, whitespace-only extra field) were not
 touched.
+
+### 2026-11-03: round 2 rework (implementer)
+
+review.md and the amended spec B3 were committed first, unedited.
+
+- Zero-accepted-rows refusal (round-2 MEDIUM 1, spec B3 as amended):
+  `load_dataset` raises `LoadError(file, "no rows accepted after cleaning (N read; counts: {...})")`
+  when any of the four files has `rows_accepted == 0`; for recommendations the
+  count is after the I6 orderable check. `POST /data` returns 422 and keeps the
+  old dataset, autoload leaves the service up and empty. Tests: one
+  parametrized unit test over the four files, a header-only file, all
+  recommendations dropped by I6, the reviewer's API case (items header plus one
+  broken row, store_a still served with names), and the autoload case.
+  Existing tests that expected an empty result from a single bad row now add a
+  valid spare row (`spare()` in `tests/test_ingest.py`, an inventory row for
+  another day in `tests/test_query.py`), because their file would otherwise
+  clean to nothing. The provided data still loads (AC5 unchanged).
+  Note: I wrote the refusal and then fixed the tests it broke, then added the
+  new tests; the new tests were not seen failing before the code.
+- LOW 4: the BOM in `ingest.py` was still a literal U+FEFF, so the earlier
+  claim here that it was replaced was wrong. It is now the escape `"\ufeff"`.
+- LOW 3: `MAX_UPLOAD_BYTES` that is non-numeric, empty, zero or negative falls
+  back to the default with a logged warning. Tests for invalid values and for a
+  file of exactly the limit (accepted) versus one byte over (413).
+- README error list updated.

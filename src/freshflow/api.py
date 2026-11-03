@@ -32,10 +32,17 @@ def _configure_logging() -> None:
 
 
 def _max_upload_bytes() -> int:
-    try:
-        return int(os.environ.get("MAX_UPLOAD_BYTES", DEFAULT_MAX_UPLOAD_BYTES))
-    except ValueError:
+    raw = os.environ.get("MAX_UPLOAD_BYTES")
+    if raw is None:
         return DEFAULT_MAX_UPLOAD_BYTES
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 0
+    if value <= 0:
+        log.warning("ignoring invalid MAX_UPLOAD_BYTES=%r; using %d", raw, DEFAULT_MAX_UPLOAD_BYTES)
+        return DEFAULT_MAX_UPLOAD_BYTES
+    return value
 
 
 class _Holder:
