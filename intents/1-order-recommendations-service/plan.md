@@ -156,3 +156,43 @@ each test states the rows it is about.
 <!-- The implementer appends here, one entry per phase: date, commits, what
 shipped, test counts, anything that diverged from the plan. Nothing above
 this line is the implementer's to edit. -->
+
+### 2026-11-03: subtasks 1-7 (implementer)
+
+Commits: 982f82a skeleton, 67f851d ingest + flags, 4ad1fb7 query, then api,
+AC5 test, Docker and repo wiring (see `git log`). All on
+`feat/1-order-recommendations-service`.
+
+Shipped: everything in the plan. Tests: 83 pytest (ingest, flags, query, api,
+provided data) plus the kit's node tests, all green under `npm run verify`.
+`docker build -t freshflow .` succeeded; `docker run` answered `/health`
+(`data_loaded: true`), `/stores/store_a/recommendations?day=2024-03-05`
+(51 rows, minimum quantity 0.0, names present), a `POST /data` re-upload of
+the four files (200), an empty-day query for `STORE_B` (200, empty list) and
+`/docs` (200), running as the non-root user `app`. This is evidence only, not
+the owner's live check.
+
+Re-measured on the real data (profiling matched, with these refinements):
+- `not_orderable` drops 327 rows, all in items 9901-9903 (332 raw rows, 5 of
+  them duplicates). No Sunday recommendation survives.
+- After dedupe: 509 negatives clamped (515 raw), 7 `quantity_outlier` rows,
+  1,523 `inventory_suspect` rows (items 1004, 1033, 1050 at least),
+  606 `missing_catalog_entry` rows (item 1099), 0 `inventory_missing`.
+- 464 of 803 slash dates have first field > 12, 0 have second field > 12.
+- No `conflicting_duplicate` anywhere in the provided data.
+
+Divergences from the plan:
+- `scripts/intent-check-lib.test.mjs` lines 122 and 161: two kit tests used
+  `src/core/...` as a stand-in for core code; with `CORE_CODE` narrowed they
+  failed, so their paths now name `src/freshflow/ingest.py` and `query.py`.
+- Added a `create_app()` factory (with `app = create_app()` at module level
+  for uvicorn) so each test gets its own dataset holder, instead of one
+  module-level holder.
+- `pyproject.toml` registers a `provided_data` pytest marker; `Dockerfile`
+  copies the `uv` binary from the pinned `ghcr.io/astral-sh/uv:0.6.10` image.
+- `REVIEW-POLICY.md` also got a one-sentence update to the Attested-tier
+  prerequisites (the product's test suite now exists).
+- Served quantities are JSON floats (`17.0`) because the response model types
+  them as float.
+- A missing multipart field gives FastAPI's own 422 (naming the field), not
+  our `LoadError` wording.

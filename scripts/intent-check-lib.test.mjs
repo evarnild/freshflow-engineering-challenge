@@ -119,7 +119,7 @@ describe('checkChange', () => {
     const files = Array.from({ length: 6 }, (_, i) => ({ path: `docs/a${i}.md`, added: 1, deleted: 0 }));
     expect(checkChange(base({ ...adj, diff: files })).routes.join()).toMatch(/6 files/);
 
-    const rules = checkChange(base({ ...adj, diff: [{ path: 'src/core/config.ts', added: 1, deleted: 1 }] }));
+    const rules = checkChange(base({ ...adj, diff: [{ path: 'src/freshflow/ingest.py', added: 1, deleted: 1 }] }));
     expect(rules.routes.join()).toMatch(/core code/);
   });
 
@@ -158,7 +158,7 @@ describe('checkChange', () => {
         branch: 'feat/27-x',
         metadata: meta({ type: 'feature', spec_accepted: '2026-10-07' }),
         intentFiles: ['intent.md', 'spec.md', 'plan.md', 'metadata.yml'],
-        diff: [{ path: 'src/core/triage.ts', added: 30, deleted: 2 }],
+        diff: [{ path: 'src/freshflow/query.py', added: 30, deleted: 2 }],
       }),
     );
     expect(r.routes.join()).toMatch(/Core code .* no test change/);
