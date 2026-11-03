@@ -13,6 +13,7 @@ The coordinator view. Each item's detail lives in `intents/<id>-<slug>/`
 | Item | Type · status |
 | --- | --- |
 | [§1](intents/1-order-recommendations-service/) Stack, skeleton and the order-recommendations service | feature · accepted |
+| [§2](intents/2-sdlc-kit-0-3/) Bring the SDLC kit up to ai-sdlc-kit 0.3.0 | refactor · draft |
 
 ## Backlog
 
