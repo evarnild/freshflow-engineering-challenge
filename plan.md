@@ -12,6 +12,7 @@ The coordinator view. Each item's detail lives in `intents/<id>-<slug>/`
 
 | Item | Type · status |
 | --- | --- |
+| [§1](intents/1-order-recommendations-service/) Stack, skeleton and the order-recommendations service | feature · accepted |
 
 ## Backlog
 
