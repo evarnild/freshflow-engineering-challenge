@@ -19,7 +19,7 @@ comment rule, a queue generated from `metadata.yml` instead of a hand-kept
 
 - The kit files in this repo match ai-sdlc-kit 0.3.0, rendered for
   `freshflow-engineering-challenge`, and `npm run verify` runs the kit's
-  254 tests green.
+  254 tests green (256 after merging §1, which added two `CORE_CODE` tests).
 - `npm run queue`, `npm run ship -- <id> --dry-run`, `npm run spawn` and
   `npm run sessions` work here; the root `plan.md` is replaced by
   `OVERVIEW.md`.

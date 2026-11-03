@@ -25,3 +25,6 @@ status.
 - 2026-11-03: §2 brings the kit to 0.3.0 (generated queue, `spawn`,
   `sessions`, `ship`), merged with §1's wiring. `npm run queue` has the
   current state.
+- §1's gates predate the `by-agent` marker. They were recorded by an agent
+  at the owner's request (see the comment on each), although `sdlc:scan`
+  counts them as owner gates. History is left as it is.

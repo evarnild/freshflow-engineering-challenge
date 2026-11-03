@@ -54,7 +54,8 @@ Re-read on `main` at `9fb634f`:
 
 ## Tests
 
-The kit's own suite (254 tests in `scripts/*.test.mjs`) covers the new
+The kit's own suite (254 tests in `scripts/*.test.mjs`; 256 once §1 is
+merged in) covers the new
 scripts. After the merge, §1's product tests run unchanged under `verify`
 and must stay green without edits.
 
