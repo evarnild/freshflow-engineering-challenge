@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from fixtures import ITEM_1001, inv_row, make_files, ord_row, rec_row
+from fixtures import inv_row, make_files, ord_row, rec_row
 from freshflow.ingest import load_dataset
 from freshflow.query import recommendations_for, stores
 
@@ -15,7 +15,7 @@ def build(**kw):
 
 def test_sorted_by_item_number_with_catalog_join():
     ds = build(
-        items=[ITEM_1001, "1002,Apples,Fruits,True,1,2"],
+        items=["1001,Bananas,Fruits,False,9.99,19.99", "1002,Apples,Fruits,True,1,2"],
         orderable=[ord_row(item="1002", tags="new"), ord_row(item="1001")],
         inventory=[],
         recs=[rec_row(item="1002"), rec_row(item="1001")],
@@ -74,3 +74,9 @@ def test_stores_lists_first_and_last_ordering_day():
     assert stores(ds) == [
         {"store_id": "store_a", "first_day": "2024-03-05", "last_day": "2024-03-07"}
     ]
+
+
+def test_prices_and_margin_come_from_the_orderable_row_not_the_catalog():
+    ds = build(items=["1001,Bananas,Fruits,False,9.99,19.99"])
+    (v,) = recommendations_for(ds, "store_a", D)
+    assert (v.purchase_price, v.suggested_retail_price, v.profit_margin) == (0.89, 1.49, 0.4)

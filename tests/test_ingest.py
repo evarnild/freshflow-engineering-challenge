@@ -120,6 +120,7 @@ def test_i6_recommendation_without_orderable_row_is_dropped():
     ds, rep = load_dataset(f)
     assert [r.item_number for r in ds.recommendations[("store_a", D)]] == [1001]
     assert counts(rep, "order_recommendations")["not_orderable"] == 1
+    assert rep.files["order_recommendations"].rows_accepted == 1
 
 
 def test_i6_recommendation_with_different_delivery_day_is_dropped():
@@ -168,7 +169,7 @@ def test_i8_missing_price_and_margin_become_none():
 def test_i8_tags_and_categories_are_normalised():
     f = make_files(
         items=["1001,Bananas, FRUITS ,False,0.89,1.49"],
-        orderable=[ord_row(tags="NEW  ", category="vegetables")],
+        orderable=[ord_row(tags="NEW  ", category="VEGETABLES ")],
     )
     ds, _ = load_dataset(f)
     assert ds.orderable[("store_a", 1001, D)].tags == ("new",)
@@ -280,3 +281,18 @@ def test_utf8_bom_on_the_first_header_is_ignored():
     f["inventory"] = "\ufeff" + f["inventory"]
     ds, _ = load_dataset(f)
     assert len(ds.inventory) == 1
+
+
+def test_i8_empty_tags_field_gives_no_tags():
+    ds, _ = load_dataset(make_files(orderable=[ord_row(tags="")]))
+    assert ds.orderable[("store_a", 1001, D)].tags == ()
+
+
+def test_report_tallies_inventory_missing_and_missing_catalog_flags():
+    f = make_files(
+        orderable=[ord_row(item="1099"), ord_row()],
+        inventory=[inv_row()],
+        recs=[rec_row(item="1099"), rec_row()],
+    )
+    _, rep = load_dataset(f)
+    assert rep.flags == {"missing_catalog_entry": 1, "inventory_missing": 1}

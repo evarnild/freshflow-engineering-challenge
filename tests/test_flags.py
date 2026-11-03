@@ -48,11 +48,20 @@ def test_outlier_boundary_is_exclusive_at_ten_times_median():
     assert QUANTITY_OUTLIER in flags_of(idx2, "store_a", 1, 101)
 
 
-def test_outlier_median_ignores_zero_and_clamped_negatives():
-    # non-zero: 10, 10, 10 -> median 10. Zeros and clamped negatives would drag it to 0.
-    idx = build_flag_index(recs(1, [0, 0, -50, -50, 10, 10, 10, 200]), {})
-    assert QUANTITY_OUTLIER in flags_of(idx, "store_a", 1, 200)
+def test_outlier_median_ignores_zeros():
+    # non-zero values 10,10,10,60 -> median 10, limit 100: nothing is flagged.
+    # Counting the zeros would give median 0 and flag every non-zero row.
+    idx = build_flag_index(recs(1, [0, 0, 0, 0, 0, 10, 10, 10, 60]), {})
     assert QUANTITY_OUTLIER not in flags_of(idx, "store_a", 1, 10)
+    assert QUANTITY_OUTLIER not in flags_of(idx, "store_a", 1, 60)
+
+
+def test_outlier_median_treats_clamped_negatives_as_zero_not_as_values():
+    # Negatives are clamped to 0 and so ignored; counting them (as 0 or as -5) would pull the
+    # median to 0 or below and flag 10 and 60.
+    idx = build_flag_index(recs(1, [-5, -5, -5, -5, -5, 10, 10, 10, 60]), {})
+    assert QUANTITY_OUTLIER not in flags_of(idx, "store_a", 1, 10)
+    assert QUANTITY_OUTLIER not in flags_of(idx, "store_a", 1, 60)
 
 
 def test_all_zero_item_has_no_division_error_and_no_flag():
@@ -106,3 +115,22 @@ def test_inventory_missing_flag():
     idx = build_flag_index([], {})
     assert INVENTORY_MISSING in flags_of(idx, "store_a", 1, 1, has_inventory=False)
     assert INVENTORY_MISSING not in flags_of(idx, "store_a", 1, 1)
+
+
+def test_inventory_suspect_uses_the_median_of_a_varying_series_not_the_max():
+    inv = {}
+    for item in (1, 2, 3, 4):
+        inv.update(_inv(item, 10.0))
+    # median 10 (one spike of 5000): a max-based rule would flag it
+    inv.update({("store_a", 5, D0 + timedelta(i)): v for i, v in enumerate([10, 10, 10, 10, 5000])})
+    idx = build_flag_index([], inv)
+    assert INVENTORY_SUSPECT not in flags_of(idx, "store_a", 5, 1)
+
+
+def test_inventory_suspect_limit_comes_from_the_same_store_not_a_global_median():
+    inv = _inv(1, 10.0) | _inv(2, 10.0) | _inv(3, 10.0) | _inv(4, 200.0)
+    for item in (1, 2, 3, 4, 5):
+        inv |= _inv(item, 1000.0, store="store_b")
+    idx = build_flag_index([], inv)
+    # store_a limit is 100, so 200 is suspect there; a global median (1000) would hide it
+    assert INVENTORY_SUSPECT in flags_of(idx, "store_a", 4, 1)

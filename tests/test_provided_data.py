@@ -21,6 +21,13 @@ def loaded():
     return load_dataset(texts)
 
 
+def test_report_row_counts_and_flag_tallies(loaded):
+    _, rep = loaded
+    assert rep.files["order_recommendations"].rows_accepted == 25000
+    assert rep.flags["missing_catalog_entry"] == 606
+    assert rep.flags.get("inventory_missing", 0) == 0
+
+
 def test_two_stores(loaded):
     ds, _ = loaded
     assert {s for s, _ in ds.recommendations} == {"store_a", "store_b"}
