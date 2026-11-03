@@ -6,6 +6,8 @@ looks wrong, and never changes a number it cannot explain.
 
 Built with the AI-native SDLC (`sdlc.md`, `intents/`): the intent, spec and plan
 for this service are in `intents/1-order-recommendations-service/`.
+[`OVERVIEW.md`](OVERVIEW.md) has the snapshot, and `npm run queue` lists
+what is queued.
 
 ## Run it
 
@@ -57,6 +59,7 @@ Needs Node >= 22 (the SDLC kit) and [uv](https://docs.astral.sh/uv/).
 ```
 npm run verify        # kit tests + ruff check + ruff format --check + pytest
 npm run check:intent  # does this branch match its intent?
+npm run queue         # every intent by status, generated from metadata.yml
 ```
 
 ## What the data looked like, and what the service does about it

@@ -3,11 +3,11 @@ name: grid
 description: Draft or update freshflow-engineering-challenge's AI-native SDLC grid (docs/sdlc-grid.md): the L0–L4 level per stage (Intent, Design, Build, Test, Deploy, Maintain), the evidence behind each, the outcome measures, and the two stages to move next. Use at the start of a quarter, after a pilot change, or when asked "where does freshflow-engineering-challenge stand".
 metadata:
   owner: eric.varnild
-  version: 0.1.0
+  version: 0.2.0
   scope: repository
   status: experimental
   review-tier: reviewed
-  ported-from: heraklios/grid@0.1.1
+  ported-from: heraklios/grid@0.1.2
 ---
 
 # /grid — where freshflow-engineering-challenge stands
@@ -17,7 +17,7 @@ and the user confirms it. The scan cannot see deliberate choices (for
 example "Maintain is out of scope" or "Design and Build are one step for
 features"), so keep any choices the user already recorded.
 
-Stamp: keep or add `<!-- generated-by: freshflow-engineering-challenge/grid@0.1.0 -->` as the
+Stamp: keep or add `<!-- generated-by: freshflow-engineering-challenge/grid@0.2.0 -->` as the
 first line of `docs/sdlc-grid.md`.
 
 ## 1. Collect evidence; don't ask for it
@@ -43,7 +43,9 @@ level counts only when its trace exists:
   is present, and `npm run verify` ran.
 - **L2:** a versioned skill produced it, so the artefact carries a
   `generated-by:` stamp. This is required from the start; no
-  self-assessment.
+  self-assessment. Design (and the plan half of Build) count as L2 only for
+  the specs (plans) that `npm run sdlc:scan` reports as made by `/spec`
+  (`/build-plan`); a hand-written file counts as L1.
 - **L3/L4:** a trigger fired, not a person. Show the hook or schedule
   config and its run log. Without that, it is not L3.
 

@@ -85,8 +85,55 @@ function stripComment(line) {
   return line;
 }
 
-/** A gate counts as recorded only when it holds a date — not TBD, no, ~, null or empty. */
-export const GATE_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** The four gate fields of metadata.yml (intents/README.md → "Gates"). */
+export const GATE_FIELDS = ['intent_accepted', 'spec_accepted', 'plan_approved', 'live_checked'];
+
+const GATE_RE = /^(\d{4}-\d{2}-\d{2})( by-agent)?$/;
+
+/**
+ * Reads one gate value. Empty (absent, `[]`) is not recorded; a bare date was
+ * written by the owner; `<date> by-agent` was written by an agent on the
+ * owner's request (intents/README.md → "Who edits what"); anything else
+ * (TBD, yes, ~, a date plus another token) is malformed, never "not recorded".
+ *
+ * @returns {{state:'empty'}|{state:'recorded',date:string,by:'owner'|'agent'}|{state:'malformed',value:unknown}}
+ */
+export function parseGate(value) {
+  if (value === undefined || (Array.isArray(value) && value.length === 0)) return { state: 'empty' };
+  const m = typeof value === 'string' ? GATE_RE.exec(value) : null;
+  if (!m) return { state: 'malformed', value };
+  return { state: 'recorded', date: m[1], by: m[2] ? 'agent' : 'owner' };
+}
+
+/**
+ * Auto-mode fields (intents/README.md → "Who edits what").
+ * `auto_authorized` reuses the gate grammar (a date, or a date plus
+ * "by-agent") and is NOT a gate: nothing waits on it. `auto_round` is the
+ * review round a stopped run is in (1 to 3, the cap); `auto_stopped` is the
+ * reason, written without " #" because stripComment would cut it there.
+ */
+export const AUTO_FIELDS = ['auto_authorized', 'auto_round', 'auto_stopped'];
+
+/** Highest review round an auto run may record (at most three). */
+export const AUTO_MAX_ROUND = 3;
+
+const ROUND_RE = /^[1-9]\d*$/;
+
+/**
+ * @returns {{authorized: ReturnType<typeof parseGate>, round: number|null, stopped: string|null}}
+ */
+export function parseAuto(metadata) {
+  const m = metadata ?? {};
+  const rawRound = m.auto_round;
+  const hasRound = typeof rawRound === 'string' && rawRound !== '';
+  const roundOk = hasRound && ROUND_RE.test(rawRound);
+  const stopped = typeof m.auto_stopped === 'string' && m.auto_stopped !== '' ? m.auto_stopped : null;
+  return {
+    authorized: parseGate(m.auto_authorized),
+    round: roundOk ? Number(rawRound) : null,
+    stopped,
+  };
+}
 
 function unquote(v) {
   const s = v.trim();
@@ -159,36 +206,54 @@ export function checkChange({ branch, metadata, intentDir, intentFiles, diff, re
   }
   const touchesSource = diff.some((d) => isSource(d.path));
   for (const gate of rules.gates) {
-    const v = metadata[gate];
-    if (typeof v !== 'string' || !GATE_DATE_RE.test(v)) {
-      // A plan that is not approved yet is fine while only artefacts change;
-      // it is a gate violation once code arrives.
-      const msg = `Gate "${gate}" is not recorded (as YYYY-MM-DD) in ${intentDir}/metadata.yml.`;
-      if (touchesSource) errors.push(`${msg} Code changed before the gate was passed.`);
-      else notes.push(msg);
+    if (parseGate(metadata[gate]).state === 'recorded') continue;
+    // A gate not passed yet is fine while only artefacts change; it is a gate
+    // violation once code arrives. A malformed one is reported below either way.
+    if (parseGate(metadata[gate]).state === 'malformed') continue;
+    const msg = `Gate "${gate}" is not recorded (as YYYY-MM-DD) in ${intentDir}/metadata.yml.`;
+    if (touchesSource) errors.push(`${msg} Code changed before the gate was passed.`);
+    else notes.push(msg);
+  }
+  for (const gate of GATE_FIELDS) {
+    if (parseGate(metadata[gate]).state === 'malformed') {
+      errors.push(
+        `${intentDir}/metadata.yml: ${gate} must be empty, a YYYY-MM-DD date (you recorded it), or a date plus "by-agent" (an agent recorded it on your request); got ${JSON.stringify(metadata[gate])}.`,
+      );
     }
   }
 
+  checkAuto(metadata, intentDir, errors);
   checkLiveCheck({ review, metadata, intentDir }, errors);
   checkShape(declared, diff, routes, notes);
   return { errors, routes, notes, type: declared, id };
+}
+
+/** A malformed auto field is an error; a gate's own grammar is untouched. */
+function checkAuto(metadata, intentDir, errors) {
+  const auto = parseAuto(metadata);
+  if (auto.authorized.state === 'malformed') {
+    errors.push(
+      `${intentDir}/metadata.yml: auto_authorized must be empty, a YYYY-MM-DD date, or a date plus "by-agent"; got ${JSON.stringify(metadata.auto_authorized)}.`,
+    );
+  }
+  const raw = metadata.auto_round;
+  const present = raw !== undefined && !(Array.isArray(raw) && raw.length === 0);
+  if (present && (auto.round === null || auto.round > AUTO_MAX_ROUND)) {
+    errors.push(`${intentDir}/metadata.yml: auto_round must be a whole number from 1 to ${AUTO_MAX_ROUND}; got ${JSON.stringify(raw)}.`);
+  }
 }
 
 const LIVE_CHECK_VALUES = ['owed', 'not-needed'];
 
 /**
  * REVIEW-POLICY.md → "Live checks": a review that says `live-check: owed`
- * blocks the merge until the owner records `live_checked: <date>`. Unlike
+ * blocks the merge until the owner records `live_checked: <date>` (or an agent on their request). Unlike
  * the plan gates this does not wait for source code to change: it is a
  * condition on the merge, and a docs-only change can owe one too.
  */
 function checkLiveCheck({ review, metadata, intentDir }, errors) {
-  const v = metadata.live_checked;
-  // An empty `live_checked:` parses as [] — not recorded, not invalid.
-  const recorded = v !== undefined && !(Array.isArray(v) && v.length === 0);
-  if (recorded && (typeof v !== 'string' || !GATE_DATE_RE.test(v))) {
-    errors.push(`${intentDir}/metadata.yml: live_checked must be a YYYY-MM-DD date (the day you did the live check), or empty.`);
-  }
+  // A malformed value is reported with the other gates, so it is not also "owed".
+  const recorded = parseGate(metadata.live_checked).state !== 'empty';
   const state = review?.['live-check'];
   if (state === undefined) return;
   if (!LIVE_CHECK_VALUES.includes(state)) {

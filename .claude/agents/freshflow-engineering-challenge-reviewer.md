@@ -69,8 +69,8 @@ reported "green" without seeing it happen yourself.
    - Guard your own harness: assert that the file actually changed
      (`git diff --quiet` returns non-zero) before running. Otherwise a patch
      that failed to apply scores as a survivor.
-3. **Every number in the prose.** Measurements in `plan.md`, `README.md` and
-   test comments should be ones you can reproduce.
+3. **Every number in the prose.** Measurements in the intent's `plan.md`,
+   `README.md` and test comments should be ones you can reproduce.
 4. **Conventions.** The boundaries in `CLAUDE.md` hold. Model calls and
    external APIs are faked in tests.
 5. **Data and secrets.** No credential, token or real user data in the
@@ -93,8 +93,21 @@ read-only: the operator or `/review` writes it to the intent's `review.md`.
 - State explicitly whether the tests prove the behaviour or merely pass.
 - Say what you verified yourself and what you took on trust.
 
+Classify every finding that needs rework. Write "Needs rework:" when the
+spec, the plan or a test determines the fix (mechanical), and "Needs
+decision:" when the fix chooses between behaviours or changes what the spec
+or plan says. When unsure, write "Needs decision:": an automated run resumes
+the implementer on the first kind only. A fix that would edit `spec.md` or
+`plan.md` above its Progress marker is always "Needs decision:". List every
+mutant that survived, and every mutant a rework is expected to kill, by name
+with its target line: the coordinator re-runs those.
+
 Set `live-check: owed | not-needed` according to `REVIEW-POLICY.md` → "Live
 checks". When one is owed, write the `## Live check` steps concretely enough
 for the owner to follow without asking. Your own run is evidence, never the
 owner's live check. A `check:intent` FAIL whose only error is an owed live
-check is the owner's to clear, not a rework finding.
+check is the owner's to clear, not a rework finding. Once the project has
+an end-to-end suite, run it when the diff touches what it covers and report
+the result; a failing scenario is a finding, and a passing one may stand in
+for the live check only on the policy's terms ("When an end-to-end suite
+stands in").

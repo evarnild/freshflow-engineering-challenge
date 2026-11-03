@@ -6,12 +6,13 @@ context, but keep Claude-specific and Codex-specific files separate.
 ## Shared Project Context
 
 - Read `CLAUDE.md` for the project overview, commands, and how work flows.
-- `plan.md`'s Queue is the queue and status overview. Each item's detail
+- Treat `npm run queue` as the queue and status overview. It is generated
+  from each intent's `metadata.yml`, and nobody edits it. Each item's detail
   lives in `intents/<id>-<slug>/` (see `intents/README.md`).
 - Apply `REVIEW-POLICY.md` when reviewing. The procedures in
-  `.claude/skills/*/SKILL.md` (`intent`, `review`, `grid`) are plain markdown
-  and apply to Codex sessions too.
-- Do not edit `plan.md` unless the user explicitly asks for a plan or status
+  `.claude/skills/*/SKILL.md` (`intent`, `spec`, `build-plan`, `review`,
+  `grid`, `ship`) are plain markdown and apply to Codex sessions too.
+- Do not edit `OVERVIEW.md` unless the user explicitly asks for an overview
   update.
 
 ## Ownership Boundaries
