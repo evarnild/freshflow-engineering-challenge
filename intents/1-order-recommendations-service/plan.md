@@ -156,3 +156,98 @@ each test states the rows it is about.
 <!-- The implementer appends here, one entry per phase: date, commits, what
 shipped, test counts, anything that diverged from the plan. Nothing above
 this line is the implementer's to edit. -->
+
+### 2026-11-03: subtasks 1-7 (implementer)
+
+Commits: 982f82a skeleton, 67f851d ingest + flags, 4ad1fb7 query, then api,
+AC5 test, Docker and repo wiring (see `git log`). All on
+`feat/1-order-recommendations-service`.
+
+Shipped: everything in the plan. Tests: 83 pytest (ingest, flags, query, api,
+provided data) plus the kit's node tests, all green under `npm run verify`.
+`docker build -t freshflow .` succeeded; `docker run` answered `/health`
+(`data_loaded: true`), `/stores/store_a/recommendations?day=2024-03-05`
+(51 rows, minimum quantity 0.0, names present), a `POST /data` re-upload of
+the four files (200), an empty-day query for `STORE_B` (200, empty list) and
+`/docs` (200), running as the non-root user `app`. This is evidence only, not
+the owner's live check.
+
+Re-measured on the real data (profiling matched, with these refinements):
+- `not_orderable` drops 327 rows, all in items 9901-9903 (332 raw rows, 5 of
+  them duplicates). No Sunday recommendation survives.
+- After dedupe: 509 negatives clamped (515 raw), 7 `quantity_outlier` rows,
+  1,523 `inventory_suspect` rows (items 1004, 1033, 1050 at least),
+  606 `missing_catalog_entry` rows (item 1099), 0 `inventory_missing`.
+- 464 of 803 slash dates have first field > 12, 0 have second field > 12.
+- No `conflicting_duplicate` anywhere in the provided data.
+
+Divergences from the plan:
+- `scripts/intent-check-lib.test.mjs` lines 122 and 161: two kit tests used
+  `src/core/...` as a stand-in for core code; with `CORE_CODE` narrowed they
+  failed, so their paths now name `src/freshflow/ingest.py` and `query.py`.
+- Added a `create_app()` factory (with `app = create_app()` at module level
+  for uvicorn) so each test gets its own dataset holder, instead of one
+  module-level holder.
+- `pyproject.toml` registers a `provided_data` pytest marker; `Dockerfile`
+  copies the `uv` binary from the pinned `ghcr.io/astral-sh/uv:0.6.10` image.
+- `REVIEW-POLICY.md` also got a one-sentence update to the Attested-tier
+  prerequisites (the product's test suite now exists).
+- Served quantities are JSON floats (`17.0`) because the response model types
+  them as float.
+- A missing multipart field gives FastAPI's own 422 (naming the field), not
+  our `LoadError` wording.
+
+### 2026-11-03: review round 1 rework (implementer)
+
+Commits (review.md itself was committed first, unedited, as "§1: review round 1 (rework)"):
+- "findings 1, 5, 6, 13, 15, 17": `csv.Error` now becomes `LoadError("not valid
+  CSV")` (422 on POST, empty-but-up on autoload); autoload also catches
+  `OSError`; strict `YYYY-MM-DD` day (pattern plus `date.fromisoformat`, 422);
+  per-file upload cap `MAX_UPLOAD_BYTES` (default 50 MB); the `freshflow`
+  logger gets a stderr handler at INFO so the autoload line shows in container
+  logs; tests for autoload switch, partial directory, UTF-8 detail, and
+  nan/inf quantities (already rejected as `bad_number`, now tested) and the BOM
+  (literal replaced by the `"\ufeff"` escape).
+- "findings 2, 3, 4, 7, 8, 9": tests only. Outlier median fixtures that change
+  the verdict, varying-series and per-store `inventory_suspect` cases, AC5
+  asserts `rows_accepted == 25000` and `missing_catalog_entry == 606`, a
+  synthetic flag-tally test, catalog prices that differ from orderable ones,
+  `"VEGETABLES "` and empty tags, and two kit tests for `CORE_CODE` (`flags.py`
+  is core, `api.py` and look-alike paths are not). Checked by hand against two
+  mutants (`q >= 0`, median to max): both now fail.
+- "findings 10, 11, 14": README numbers (509 after dedupe, medians 18 and 9,
+  store_b 1009 in the suspect list, what a known store means), plus the new
+  cap and 413 documented.
+
+Needs a spec/plan note: the upload cap answers 413, which spec B3 (422 only)
+does not list; left for the owner to fold into the spec. Skipped: 12 (stale
+text in `intents/README.md` and `docs/sdlc-grid.md`, `/grid` refreshes it),
+16 (float quantities), 18 (image digests), 19 (hatchling in the dependency
+table). The other edge gaps in 13 (`_day` whitespace, loose ISO regex,
+`bad_bool`, blank rows, header strip, whitespace-only extra field) were not
+touched.
+
+### 2026-11-03: round 2 rework (implementer)
+
+review.md and the amended spec B3 were committed first, unedited.
+
+- Zero-accepted-rows refusal (round-2 MEDIUM 1, spec B3 as amended):
+  `load_dataset` raises `LoadError(file, "no rows accepted after cleaning (N read; counts: {...})")`
+  when any of the four files has `rows_accepted == 0`; for recommendations the
+  count is after the I6 orderable check. `POST /data` returns 422 and keeps the
+  old dataset, autoload leaves the service up and empty. Tests: one
+  parametrized unit test over the four files, a header-only file, all
+  recommendations dropped by I6, the reviewer's API case (items header plus one
+  broken row, store_a still served with names), and the autoload case.
+  Existing tests that expected an empty result from a single bad row now add a
+  valid spare row (`spare()` in `tests/test_ingest.py`, an inventory row for
+  another day in `tests/test_query.py`), because their file would otherwise
+  clean to nothing. The provided data still loads (AC5 unchanged).
+  Note: I wrote the refusal and then fixed the tests it broke, then added the
+  new tests; the new tests were not seen failing before the code.
+- LOW 4: the BOM in `ingest.py` was still a literal U+FEFF, so the earlier
+  claim here that it was replaced was wrong. It is now the escape `"\ufeff"`.
+- LOW 3: `MAX_UPLOAD_BYTES` that is non-numeric, empty, zero or negative falls
+  back to the default with a logged warning. Tests for invalid values and for a
+  file of exactly the limit (accepted) versus one byte over (413).
+- README error list updated.

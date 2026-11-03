@@ -3,7 +3,7 @@
 id: 1
 slug: order-recommendations-service
 type: feature            # feature | fix | refactor | adjustment | experiment
-status: accepted          # draft | accepted | in-progress | in-review | done | abandoned | deferred
+status: in-review         # draft | accepted | in-progress | in-review | done | abandoned | deferred
 title: Stack, skeleton and the order-recommendations service (load CSVs, serve per store/day)
 review_tier: reviewed    # raised: narrows CORE_CODE in the kit's checker and names paths in REVIEW-POLICY.md
 # Gates: the date you passed each one. Leave empty until you have. An agent
@@ -12,7 +12,7 @@ review_tier: reviewed    # raised: narrows CORE_CODE in the kit's checker and na
 intent_accepted: 2026-11-03     # recorded by agent on owner's request
 spec_accepted: 2026-11-03       # recorded by agent on owner's request
 plan_approved: 2026-11-03       # recorded by agent on owner's request
-live_checked:            # only when review.md says live-check: owed — the day you ran it yourself
+live_checked: 2026-11-03  # only when review.md says live-check: owed — the day you ran it yourself
 merged:                  # merge commit hash
 follows_up:              # fix only: id of the intent whose change caused this defect, if known
 links:

@@ -1,0 +1,13 @@
+.git
+.claude
+node_modules
+.venv
+__pycache__
+.pytest_cache
+.ruff_cache
+engineering-challenge.zip
+intents
+docs
+scripts
+tests
+*.md

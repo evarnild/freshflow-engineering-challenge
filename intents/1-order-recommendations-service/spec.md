@@ -28,7 +28,12 @@ Accepted intent: [intent.md](intent.md)
   response (200) is the **load report** (B9). If a file is missing, has a
   missing required column, or is not decodable UTF-8 CSV, the response is
   422 naming the file and the problem, and the previous dataset stays in
-  place.
+  place. *(Amended 2026-11-03 at the owner's request, review round 2,
+  MEDIUM 1.)* The same 422 applies when any of the four files ends up with
+  zero accepted rows after cleaning. The detail names the file and includes
+  that file's report counts, so one bad file cannot silently wipe the
+  catalog or the recommendations. An autoload in that state leaves the
+  service up and empty, as for any other load error (B2).
 - **B4** `GET /stores/{store_id}/recommendations?day=YYYY-MM-DD` returns the
   recommendations whose **ordering day** is `day`, sorted by item number.
   Each row carries `item_number`, `name`, `category`, `is_bio`,
