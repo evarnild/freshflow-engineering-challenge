@@ -1,12 +1,196 @@
 <!-- generated-by: freshflow-engineering-challenge/review@0.1.0 -->
 # §1 review: Stack, skeleton and the order-recommendations service
 
-verdict: rework
+verdict: escalate
 tier: reviewed
-reviewed-commit: 41b91d7510f3190bc94b543adb4d8e1a0aa20e84
-round: 1
+reviewed-commit: 47d7edd45391119a85ea9a77bb7a2e084b8a6083
+round: 2
 sampled: no
 live-check: owed
+
+**Tier and what set it:** the path table sets Reviewed (the change touches
+`REVIEW-POLICY.md`, `scripts/intent-check-lib.mjs` and
+`src/freshflow/api.py`), and `review_tier: reviewed` in `metadata.yml`
+agrees.
+
+**Verdict in short:**
+- **No finding needs rework.** Every round-1 HIGH and MEDIUM is resolved,
+  and so are the requested LOWs: 10, 11, 13 (nan/inf), 14, 15 and 17.
+- **Escalate:** you read the diff, do the live check, then merge.
+- **Your decisions:** one new MEDIUM (an upload whose rows are all dropped
+  still replaces the data) and one spec amendment (the 413 response).
+
+## Passes
+| # | Pass | Result |
+| --- | --- | --- |
+| 1 | Intent and plan match | findings (1). The 413 status is not in spec B3; it needs an owner amendment |
+| 2 | Type check | FAIL. Its only error is the owed live check, which is the owner's to clear, not rework |
+| 3 | Behaviour against the spec | findings (1, MEDIUM, an owner decision) |
+| 4 | Tests prove the behaviour | findings (1, LOW). 43 mutants: 31 killed, 12 survived. Of the survivors, 3 are equivalent, 6 are round-1 edge cases left unfixed on purpose, and 3 are at the new upload cap |
+| 5 | Conventions | pass |
+| 6 | Numbers in prose | findings (1, LOW). Progress claims a BOM edit that isn't there. The README numbers all reproduce |
+| 7 | Documentation | pass. Finding 12 (stale text) was skipped on purpose |
+| 8 | Guardrails and hygiene | pass. ruff is clean and no dependency was added |
+| 9 | Repository-specific footguns | pass. The list is still empty; the two round-1 proposals stand |
+
+## Type check
+```
+type-check: FAIL (intent 1, feature)
+  error: A live check is owed and not recorded. Do the steps in intents/1-order-recommendations-service/review.md → ## Live check, then set live_checked: <date> in intents/1-order-recommendations-service/metadata.yml.
+  note:  26 file(s), 79196 line(s) changed outside intents/.
+```
+
+## Round-1 findings: resolution
+
+The reviewer re-ran every round-1 surviving mutant at the same lines as
+they now stand:
+
+| # | Status | Evidence |
+| --- | --- | --- |
+| 1 | resolved | `ingest.py:241` wraps the error in `LoadError`, and `api.py:78` catches `OSError`. Both catch-removal mutants are killed, and a >128 KB field gives 422 |
+| 2 | resolved | both `flags:53` mutants are killed |
+| 3 | resolved | `flags:60` (median → max) and `flags:66` (global median) are killed |
+| 4 | resolved | `ingest:385`, `:410` and `:411` are killed. AC5 asserts 25000, 606 and 0 |
+| 5 | resolved | `api:43`, `:47`, `:48` and `:55` are killed |
+| 6 | resolved | `1709596800`, `2024-03-05T00:00:00` and `2024-02-30` give 422 in the container. The new mutants are killed |
+| 7 | resolved | `query:47`, `:48` and `:49` are killed |
+| 8 | resolved | `ingest:309` and `:319` are killed |
+| 9 | resolved | all 3 kit mutants are killed, each on the intended assertion |
+| 10, 11 | resolved | README numbers re-measured: 509, medians 18 and 9, store_b/1009 = 305 of 1,523 |
+| 13 (nan/inf, BOM) | resolved | `ingest:215` and `:239` are killed. The literal-BOM claim is wrong; see finding 4 below |
+| 14 | resolved | the README states it, and it matches `api.py` |
+| 15 | resolved, partly | a per-file cap with 413; see findings 2 and 3 |
+| 17 | resolved | the container log shows `INFO:freshflow:autoloaded dataset from /app/data` |
+
+**Not fixed, by choice** (listed in Progress): 12, 16, 18 and 19, and the
+remaining edges in 13. The surviving mutants for those edges are
+`ingest:161`, `:192`, `:226`, `:239` (blank rows), `:242` and `:266`.
+
+## Findings
+
+### MEDIUM
+1. **`src/freshflow/api.py:158` / `load_dataset`: a structurally valid upload
+   whose rows are all dropped still replaces the dataset.**
+   - **Seen live:** `items.csv` with only a header and one broken row
+     returned 200 with `items rows_accepted: 0` and
+     `missing_catalog_entry: 25000`. Every recommendation is then served
+     with a null name, category and `is_bio`.
+   - This matches spec B3 as written, but one bad file silently wipes the
+     catalog for every caller.
+   - **Owner decision:** either refuse to swap (422) when a file accepts 0
+     rows, or accept the risk in the spec. If refusing, it is a small fix:
+     a fix intent, or a round-3 rework.
+
+### LOW (worth a look)
+2. **`spec.md` B3:** the 413 response and `MAX_UPLOAD_BYTES` are missing
+   from the spec. 413 is the right code (RFC 9110), and it fires before the
+   swap.
+   - **Limit:** Starlette spools the multipart body to disk before the
+     handler runs. So the cap bounds only the in-memory read, not bandwidth
+     or disk.
+   - **Owner decision:** amend the spec.
+3. **`src/freshflow/api.py:38,152`: the edges of the upload cap are
+   untested.** Two mutants survive:
+   - an invalid `MAX_UPLOAD_BYTES` silently falls back to 50 MB;
+   - `>` changed to `>=`.
+
+   A negative cap makes every upload 413. Add a test for an invalid value
+   and one at exactly the limit, and reject a non-positive cap.
+4. **The round-1 rework entry in `plan.md`'s Progress against
+   `src/freshflow/ingest.py:240`:** Progress says the BOM literal became
+   `"﻿"`, but the source still holds the literal U+FEFF bytes. I
+   confirmed this myself with `od`. Make the edit, or correct the claim.
+5. **Carried over:** findings 12, 16, 18 and 19, and the edges in 13, from
+   round 1.
+
+## Not checked
+- **The spec's full load in under 2 s:** not measurable this round. An
+  unrelated transcription job (PID 21260, started 21:27) holds the CPU at
+  100%. Under that load, `load_dataset` takes about 8 s both at 41b91d7 and
+  at HEAD (an A/B test, 3 rounds each), so the slowdown from 2.5 s to 20 s
+  in pytest is load, not a code regression. The round-1 figure, taken
+  before the job started, was 1.33 s.
+- **The 413 in the container:** proven only through TestClient and mutants.
+- **Concurrent POST and GET under load:** not stress-tested.
+- **Duplicate log lines:** not checked for the case where a deployment also
+  configures the root logger.
+- **The owner's run of AC6 on their own machine.**
+
+## Live check
+- **owed:** rule 1. The diff touches `src/freshflow/api.py`, `Dockerfile`,
+  `pyproject.toml` and `uv.lock`.
+- **steps:** run these from the repository root on the branch (the
+  worktree), on an idle machine.
+  1. `docker build -t freshflow .`
+  2. `docker run --rm --name ff -p 8000:8000 freshflow`
+  3. In a second shell:
+     - `docker logs ff`
+     - `curl localhost:8000/health`
+     - `curl localhost:8000/stores`
+     - `curl "localhost:8000/stores/store_a/recommendations?day=2024-03-05"`
+     - `curl "localhost:8000/stores/STORE_B/recommendations?day=2024-03-03"`
+     - `curl -i "localhost:8000/stores/store_z/recommendations?day=2024-03-05"`
+     - `curl -s -o /dev/null -w "%{http_code}\n" "localhost:8000/stores/store_a/recommendations?day=1709596800"`
+     - `time curl -F items=@data/items.csv -F orderable_items=@data/orderable_items.csv -F inventory=@data/inventory.csv -F order_recommendations=@data/order_recommendations.csv localhost:8000/data`
+     - a bad re-upload: the same command with `-F inventory=@data/items.csv`
+       in place of the inventory file
+  4. Re-run the store_a query.
+  5. Open <http://localhost:8000/docs>.
+- **you should see:**
+  - the logs show `INFO:freshflow:autoloaded dataset from /app/data`;
+  - `/health` returns `{"status":"ok","data_loaded":true}`;
+  - `/stores` lists `store_a` and `store_b`, both 2024-01-01 to 2024-12-31;
+  - the store_a query returns `count` 51, every `recommended_quantity` ≥ 0,
+    item 1001 named "Organic Bananas", and `tags: []`;
+  - the STORE_B Sunday query returns 200 with `count` 0;
+  - store_z returns 404;
+  - the timestamp `day` prints 422;
+  - the POST returns 200 in under 2 s, with flags
+    `{"inventory_suspect":1523,"missing_catalog_entry":606,"negative_quantity_clamped":509,"quantity_outlier":7}`;
+  - the bad re-upload returns 422 naming `inventory` and `quantity`, and the
+    store_a query still returns 51 rows;
+  - `/docs` lists all five endpoints.
+
+## Verified myself vs. taken on trust
+
+**Coordinator:**
+- `npm run verify`: green (kit 60, ruff clean, pytest "109 passed, 1
+  warning in 20.57s").
+- `npm run check:intent`: FAIL, and its only error is the owed live check.
+- `pytest --durations`: the real-data fixture setup is 7.8 s.
+- `od` on `ingest.py:238-242`: the literal U+FEFF is still present, and
+  there is no `﻿` escape.
+- `Get-Process`: PID 21260 started at 21:27 with about 49,000 s of CPU.
+
+**Reviewer agent:**
+- It re-ran `verify` (109 passed) and `check:intent`, with the same
+  results.
+- It ran 43 mutants, with a backup and restore per file and the full suite
+  for each. It re-ran one kit mutant by hand.
+- It ran the `load_dataset` A/B timing: 41b91d7 against HEAD, 3 rounds
+  each, no difference.
+- It re-measured the README numbers against `data/`; all reproduced.
+- It ran `docker build` and `docker run` on port 18766:
+  - the strict-day probes;
+  - a re-upload, which returned 200;
+  - the all-dropped items upload behind the MEDIUM finding;
+  - `docker logs`.
+
+  It then stopped the container and removed the image.
+- `git status --short` was clean at the end.
+
+**Taken on trust:** nothing beyond round 1.
+
+# Round 1 (history)
+
+- verdict: rework
+- tier: reviewed
+- reviewed-commit: 41b91d7510f3190bc94b543adb4d8e1a0aa20e84
+- round: 1
+- sampled: no
+- live-check: owed
+
+The resolution of each finding is in the round-2 table above.
 
 **Tier and what set it:** the path table puts this change in the Reviewed
 tier, because it touches `REVIEW-POLICY.md`, `scripts/intent-check-lib.mjs`,
@@ -21,7 +205,7 @@ and `src/freshflow/api.py` (named "by meaning"). `metadata.yml` also sets
   `inventory_suspect`, the load-report counts, the autoload switch, the
   UTF-8 rejection, the price fields and the `CORE_CODE` narrowing.
 
-## Passes
+### Passes
 | # | Pass | Result |
 | --- | --- | --- |
 | 1 | Intent and plan match | pass. The divergences are recorded in Progress |
@@ -34,14 +218,14 @@ and `src/freshflow/api.py` (named "by meaning"). `metadata.yml` also sets
 | 8 | Guardrails and hygiene | pass (one nit) |
 | 9 | Repository-specific footguns | pass. The list is empty; two entries are proposed below |
 
-## Type check
+### Type check
 ```
 > node scripts/check-intent.mjs
 type-check: PASS (intent 1, feature)
   note:  26 file(s), 78952 line(s) changed outside intents/.
 ```
 
-## Findings
+### Findings
 
 ### HIGH
 
@@ -174,7 +358,7 @@ type-check: PASS (intent 1, feature)
 - `ingest.py:341`: the int/float coercion
 - `api.py:41`: `utf-8` versus `utf-8-sig`
 
-## Not checked
+### Not checked
 - Concurrent `POST /data` and GET under load. I reasoned about this from the
   code (a single reference swap under a lock) but did not stress it.
 - Memory and latency for large uploads: there is no cap, and nothing was
@@ -190,7 +374,7 @@ type-check: PASS (intent 1, feature)
 - Python 3.14: uv resolved 3.12.9 locally.
 - AC6 on the owner's machine. That is the live check.
 
-## Live check
+### Live check
 - **owed:** rule 1. The diff touches `src/freshflow/api.py`, `Dockerfile`,
   `pyproject.toml` and `uv.lock`.
 - **steps:** run these from the repository root on the branch, after the
@@ -221,7 +405,7 @@ type-check: PASS (intent 1, feature)
     store_a still returns 51 rows;
   - `/docs` lists all five endpoints.
 
-## Verified myself vs. taken on trust
+### Verified myself vs. taken on trust
 
 **Coordinator:**
 - `npm run verify`: green. Kit tests passed, ruff passed, 83 pytest tests
@@ -249,7 +433,7 @@ type-check: PASS (intent 1, feature)
 **Taken on trust:** that `verify` fails loudly without uv; the account of
 the commit split.
 
-## Proposed footguns for pass 9
+### Proposed footguns for pass 9
 1. Parser exceptions other than `LoadError` (`csv.Error`, `OSError`)
    escaping into the HTTP or startup paths.
 2. Fixtures that make mutants equivalent:
