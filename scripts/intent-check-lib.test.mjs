@@ -5,7 +5,9 @@ import {
   checkChange,
   formatResult,
   parseArgs,
+  parseAuto,
   parseBranch,
+  parseGate,
   parseMetadata,
   parseReviewHeader,
 } from './intent-check-lib.mjs';
@@ -180,10 +182,46 @@ describe('parseMetadata edge cases', () => {
 });
 
 describe('gates must hold a date', () => {
-  for (const value of ['~', 'null', 'TBD', 'no', '2026-10', [], 'x2026-10-07', '2026-10-07x', 'approved 2026-10-07']) {
-    it(`rejects plan_approved: ${JSON.stringify(value)} once code changed`, () => {
-      const r = checkChange(base({ metadata: meta({ plan_approved: value }) }));
-      expect(r.errors.join()).toMatch(/plan_approved.*Code changed before the gate/);
+  it('treats an empty gate as not recorded, an error once code changed', () => {
+    const r = checkChange(base({ metadata: meta({ plan_approved: [] }) }));
+    expect(r.errors.join()).toMatch(/plan_approved.*Code changed before the gate/);
+  });
+
+  for (const value of ['~', 'null', 'TBD', 'no', '2026-10', 'x2026-10-07', '2026-10-07x', 'approved 2026-10-07']) {
+    it(`rejects plan_approved: ${JSON.stringify(value)} as malformed, code or no code`, () => {
+      for (const diff of [base().diff, [{ path: 'README.md', added: 1, deleted: 0 }]]) {
+        const r = checkChange(base({ metadata: meta({ plan_approved: value }), diff }));
+        expect(r.errors.join()).toMatch(/plan_approved must be empty/);
+        expect(r.errors).toHaveLength(1);
+      }
+    });
+  }
+
+  it('passes gates recorded with the by-agent marker, with code changed', () => {
+    const r = checkChange(base({ metadata: meta({ intent_accepted: '2026-10-20 by-agent', plan_approved: '2026-10-20 by-agent' }) }));
+    expect(r.errors).toEqual([]);
+  });
+
+  it('fails a malformed gate that the type does not need, naming the field', () => {
+    const r = checkChange(base({ metadata: meta({ spec_accepted: '2026-10-20 by-claude' }) }));
+    expect(r.errors.join()).toMatch(/spec_accepted must be empty/);
+  });
+});
+
+describe('parseGate', () => {
+  it('reads a bare date as the owner', () => {
+    expect(parseGate('2026-10-20')).toEqual({ state: 'recorded', date: '2026-10-20', by: 'owner' });
+  });
+  it('reads the by-agent token as an agent', () => {
+    expect(parseGate('2026-10-20 by-agent')).toEqual({ state: 'recorded', date: '2026-10-20', by: 'agent' });
+  });
+  it('reads absent and empty as empty, not malformed', () => {
+    expect(parseGate([])).toEqual({ state: 'empty' });
+    expect(parseGate(undefined)).toEqual({ state: 'empty' });
+  });
+  for (const value of ['yes', 'TBD', '2026-1-2', '2026-10-20 by-claude', '2026-10-20by-agent', 'by-agent', '2026-10-20 by-agent ', ['x']]) {
+    it(`reads ${JSON.stringify(value)} as malformed`, () => {
+      expect(parseGate(value).state).toBe('malformed');
     });
   }
 });
@@ -295,6 +333,11 @@ describe('live checks', () => {
     expect(checkChange(feature({ review: { 'live-check': 'owed' }, metadata: empty })).errors.join()).toMatch(/live check is owed/);
   });
 
+  it('passes an owed live check recorded with by-agent', () => {
+    const r = checkChange(feature({ review: { 'live-check': 'owed' }, metadata: featureMeta({ live_checked: '2026-10-20 by-agent' }) }));
+    expect(r.errors).toEqual([]);
+  });
+
   it('passes once live_checked holds a date', () => {
     const r = checkChange(feature({ review: { 'live-check': 'owed' }, metadata: featureMeta({ live_checked: '2026-10-09' }) }));
     expect(r.errors).toEqual([]);
@@ -352,5 +395,57 @@ describe('language-neutral path rules', () => {
       { path: 'tests/test_intake.py', added: 20, deleted: 0 },
     ];
     expect(checkChange(base({ metadata: meta({ plan_approved: [] }), diff })).errors).toEqual([]);
+  });
+});
+
+describe('auto fields', () => {
+  const withAuto = (over) => checkChange(base({ metadata: meta(over) }));
+
+  it('T1: parseAuto reads a date, a date plus by-agent, and empty', () => {
+    expect(parseAuto({ auto_authorized: '2026-10-24' }).authorized).toEqual({ state: 'recorded', date: '2026-10-24', by: 'owner' });
+    expect(parseAuto({ auto_authorized: '2026-10-24 by-agent' }).authorized).toEqual({ state: 'recorded', date: '2026-10-24', by: 'agent' });
+    expect(parseAuto({}).authorized).toEqual({ state: 'empty' });
+    expect(parseAuto({ auto_authorized: [] }).authorized).toEqual({ state: 'empty' });
+  });
+
+  for (const value of ['yes', '2026-10-24 by-auto', '2026-1-2']) it(`T1: parseAuto reads ${JSON.stringify(value)} as malformed`, () => {
+    expect(parseAuto({ auto_authorized: value }).authorized.state).toBe('malformed');
+  });
+
+  it('T1: parseAuto reads the round and the reason', () => {
+    expect(parseAuto({ auto_round: '2', auto_stopped: 'live check owed' })).toMatchObject({ round: 2, stopped: 'live check owed' });
+    expect(parseAuto({ auto_round: [], auto_stopped: [] })).toMatchObject({ round: null, stopped: null });
+  });
+
+  it('T2: a malformed auto_authorized is an error naming the field', () => {
+    const r = withAuto({ auto_authorized: 'yes' });
+    expect(r.errors.join('\n')).toMatch(/auto_authorized must be empty, a YYYY-MM-DD date/);
+    expect(withAuto({ auto_authorized: '2026-10-24 by-agent' }).errors).toEqual([]);
+  });
+
+  for (const value of ['4', '0', 'two', '1.5', '-1']) it(`T2: auto_round ${JSON.stringify(value)} is an error`, () => {
+    expect(withAuto({ auto_round: value }).errors.join('\n')).toMatch(/auto_round must be a whole number from 1 to 3/);
+  });
+
+  for (const value of ['1', '2', '3']) it(`T2: auto_round ${value} passes`, () => {
+    expect(withAuto({ auto_round: value }).errors).toEqual([]);
+  });
+
+  it('T2: an intent with no auto fields is unaffected', () => {
+    expect(checkChange(base()).errors).toEqual([]);
+    expect(withAuto({ auto_authorized: [], auto_round: [], auto_stopped: [] }).errors).toEqual([]);
+  });
+
+  it('T3: the gate grammar did not widen', () => {
+    expect(parseGate('2026-10-24 by-auto').state).toBe('malformed');
+    expect(parseGate('2026-10-24 by-agent').state).toBe('recorded');
+    // and auto_authorized is not a gate: an empty one never blocks code
+    expect(withAuto({}).errors).toEqual([]);
+  });
+
+  it('T4: a comment is stripped from auto_stopped, so the skill writes reasons without " #"', () => {
+    expect(parseMetadata('auto_stopped: live check owed  # note\n').auto_stopped).toBe('live check owed');
+    expect(parseMetadata('auto_stopped: live check owed\n').auto_stopped).toBe('live check owed');
+    expect(parseMetadata('auto_stopped: cut # here\n').auto_stopped).toBe('cut');
   });
 });

@@ -1,15 +1,14 @@
 id: 2
 slug: sdlc-kit-0-3
 type: refactor           # feature | fix | refactor | adjustment | experiment
-status: accepted         # draft | accepted | in-progress | in-review | done | abandoned | deferred
+status: in-review        # draft | accepted | in-progress | in-review | done | abandoned | deferred
 title: Bring the SDLC kit up to ai-sdlc-kit 0.3.0
 review_tier: reviewed    # kit files: REVIEW-POLICY.md, skills, agents, hooks
-# Gates: the date you passed each one. Leave empty until you have. An agent
-# recording one at your request appends "# recorded by agent on owner's request"
-# (intents/README.md → "Recording a gate"); live_checked is always yours.
-intent_accepted: 2026-11-03     # recorded by agent on owner's request
+# Gates: the date you passed each one (a bare date), or `<date> by-agent` when
+# an agent recorded it on your request. Leave empty until passed.
+intent_accepted: 2026-11-03 by-agent    # owner's yes, 2026-11-03
 spec_accepted:           # feature only
-plan_approved: 2026-11-03       # recorded by agent on owner's request
+plan_approved: 2026-11-03 by-agent      # owner's yes, 2026-11-03
 live_checked:            # only when review.md says live-check: owed — the day you ran it yourself
 merged:                  # merge commit hash
 follows_up:              # fix only: id of the intent whose change caused this defect, if known

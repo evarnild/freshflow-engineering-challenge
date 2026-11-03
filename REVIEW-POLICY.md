@@ -27,7 +27,7 @@ You may escalate by hand at any time without giving a reason.
 | --- | --- | --- | --- |
 | **Automated** | `npm run verify` and `npm run check:intent` are green, then merge | nothing beyond merging | `intents/**` artefacts only; `docs/**`; `README.md` wording |
 | **Attested** | `/review` runs every pass and writes `review.md` | read the report, not the diff; merge if you agree with its scope | `src/**` not listed below, tests-only changes, `scripts/**` not listed below, build config |
-| **Reviewed** | the same report, and you read the diff | full read, then merge | this file; the kit's enforcement (`scripts/intent-check-lib.mjs`, `scripts/check-intent.mjs`); lint guardrails once they exist (a config change that loosens a rule, a raised or removed warning cap, a new disable comment in `src/`); `.claude/agents/**`, `.codex/agents/**`, `.claude/skills/**`; `.claude/settings.json` (its hooks run in every session); **and, by meaning until §1 names the paths:** model prompts and agent instructions the product ships, anything that sends text to a user or an external system without a human in between, credential handling, and storage or logging of users' personal data |
+| **Reviewed** | the same report, and you read the diff | full read, then merge | this file; the kit's enforcement (`scripts/intent-check-lib.mjs`, `scripts/check-intent.mjs`, and the merge preconditions in `scripts/ship-lib.mjs`, `scripts/ship.mjs`); lint guardrails once they exist (a config change that loosens a rule, a raised or removed warning cap, a new disable comment in `src/`); `.claude/agents/**`, `.codex/agents/**`, `.claude/skills/**`; `.claude/settings.json` and the hook script it runs, `scripts/session-event.mjs` (they run in every session); **and, by meaning until §1 names the paths:** model prompts and agent instructions the product ships, anything that sends text to a user or an external system without a human in between, credential handling, and storage or logging of users' personal data |
 
 **Approving means:** "I read what the checker did, I accept its scope,
 including the Not-checked list, and I take responsibility for this change."
@@ -47,16 +47,23 @@ meets this**, so any `src/` change before then is reviewed as Reviewed.
 
 ### Against rubber-stamping
 
-- **Sampling.** Every fifth attested change gets a full diff read after the
-  merge. Volume here is low, so a 1-in-20 rate would never fire. Mark it
-  `sampled: yes` in its `review.md`. Anything you find that the checker
-  missed is a defect in the checker: add a pass or a rule here, or move the
-  path to Reviewed.
+- **Sampling.** Every fifth attested manual change, and every third attested
+  auto-run change, gets a full diff read after the merge. An auto-run change
+  is one whose review header says `run: auto`; the two kinds are counted
+  separately, and a review with no `run:` line counts as manual. Volume here
+  is low, so a 1-in-20 rate would never fire, and an auto run has no owner
+  prompt between its steps, hence 1 in 3.
+  `npm run sdlc:scan -- --sample-due <auto|manual> --exclude <id>` says
+  whether the change under review is the one. Mark it `sampled: yes` in its
+  `review.md`. Anything you find that the checker missed is a defect in the
+  checker: add a pass or a rule here, or move the path to Reviewed.
 - **Quality per tier.** `npm run sdlc:scan` (and so `/grid`) counts
-  follow-up fixes and reverts per tier. A follow-up fix is a fix intent whose
-  `follows_up:` names the intent whose change caused the defect. A revert
-  counts when its subject names the reverted `§`. If attested changes need
-  follow-ups more often than reviewed ones, the boundary is wrong: move it.
+  follow-up fixes and reverts per tier and per run kind (`auto` | `manual`).
+  A follow-up fix is a fix intent whose `follows_up:` names the intent whose
+  change caused the defect; `/intent` sets it when the cause is known. A
+  revert counts when its subject names the reverted `§`. If attested changes
+  need follow-ups more often than reviewed ones, the boundary is wrong: move
+  it.
 - **Time-to-approve is not tracked.** Fast approval is not the goal.
 
 ## Live checks
@@ -77,14 +84,22 @@ a hook in a real session) and record that you did, before the merge.
      a real install. The report names which item.
 
   Otherwise it sets `live-check: not-needed`.
+- **When an end-to-end suite stands in.** Once the project has an automated
+  end-to-end suite (its command named here when it lands), it may replace a
+  live check only when all of these hold: the check is owed by rule 1
+  alone; a named scenario already covers the changed behaviour; the change
+  is neither new behaviour nor visual; and `/review` ran the suite itself
+  and it passed. Then `/review` sets `live-check: not-needed`, naming the
+  scenario and the run. Anything else stays `owed`. You can always set it
+  back to `owed`; at the Attested tier that is part of reading the report.
 - **What the report says.** When a check is owed, `## Live check` lists
   concrete steps: the command, the input or fixture to start from, what to
   do, and what you should see. When none is needed, one line says why.
-- **Who records it.** You do, after doing the steps, by setting
-  `live_checked: <date>` in `metadata.yml`. If the check finds a defect,
-  leave the date empty and send the change back to rework, or open a fix
-  intent if the defect is out of scope. An agent never writes this date,
-  even when asked (`intents/README.md` → "Recording a gate").
+- **Who records it.** You, after doing the steps, or an agent on your
+  request once you say you ran them (`intents/README.md` → "Who edits
+  what"): `live_checked: <date>` in `metadata.yml`, like the other gates.
+  If the check finds a defect, leave the date empty and send the change
+  back to rework, or open a fix intent if the defect is out of scope.
 - **An agent's own run is evidence, not the gate.** The reviewer or the
   implementer may run the thing and list what it saw under "Verified
   myself". That never fills `live_checked:`. The point is a check by
@@ -120,9 +135,9 @@ naming the check that failed:
 3. No live check is owed without `live_checked:` recorded. `check:intent`
    covers this.
 
-Then it merges with `--no-ff` and runs `npm run verify` on `main`. Last, it
-does the bookkeeping: `merged:` and `status: done` in `metadata.yml`, and the
-`plan.md` row moves to Shipped.
+Then it merges with `--no-ff`, runs `npm run verify` on `main`, and does the
+bookkeeping: `merged:` and `status: done` in `metadata.yml`. There is no
+queue row to move: `npm run queue` is generated.
 
 ## Passes
 
@@ -143,7 +158,7 @@ Each pass reports `pass`, `findings`, or `not run` with the reason.
    line. A fix must carry a test that failed before the fix.
 5. **Conventions** (`CLAUDE.md`). The architecture boundaries and
    conventions written there hold.
-6. **Numbers in prose.** Every measurement in `plan.md`, `README.md`, intent
+6. **Numbers in prose.** Every measurement in the intent's `plan.md`, `README.md`, intent
    artefacts and test comments can be reproduced.
 7. **Documentation.** `README.md` documents new behaviour, and `CLAUDE.md`
    still describes the architecture accurately.
@@ -182,6 +197,7 @@ tier: automated | attested | reviewed
 reviewed-commit: <hash>
 round: <n>
 sampled: no
+run: auto | manual
 live-check: owed | not-needed
 
 ## Passes
@@ -195,6 +211,7 @@ live-check: owed | not-needed
 
 ## Findings
 - **HIGH** `src/foo.ts:42` — <what is wrong>. Needs rework: <minimal fix>.
+- **MEDIUM** `scripts/foo.mjs:9` — <…>. Needs decision: <the choice>.
 - **LOW** `README.md:12` — <…>. Worth a look.
 
 ## Not checked
@@ -210,6 +227,16 @@ live-check: owed | not-needed
 ## Verified myself vs. taken on trust
 - <which commands actually ran, with results>
 ```
+
+`run:` says how the change was driven: `auto` when `/auto` called the
+review, otherwise `manual`.
+
+A finding that needs rework says which kind. **"Needs rework:"** is
+mechanical: the spec, the plan or a test determines the fix. **"Needs
+decision:"** names the choice: the fix picks between behaviours, or changes
+what the spec or plan says. Both give the verdict `rework`; an auto run
+resumes the implementer on the first kind only and stops for the owner on
+the second.
 
 Verdicts:
 - `attest`: no findings that need rework. Approve if you agree.

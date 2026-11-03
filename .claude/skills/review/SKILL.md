@@ -3,11 +3,11 @@ name: review
 description: Run freshflow-engineering-challenge's review policy against a branch and write the review report (intents/<id>-<slug>/review.md) with passes, findings, a Not-checked section and an attest/escalate/rework verdict. Use before merging any freshflow-engineering-challenge branch into main, or to re-review after rework. Invoke as /review [branch].
 metadata:
   owner: eric.varnild
-  version: 0.1.0
+  version: 0.2.0
   scope: repository
   status: experimental
   review-tier: reviewed
-  ported-from: heraklios/review@0.1.2
+  ported-from: heraklios/review@0.1.5
 ---
 
 # /review — the agentic review before you merge
@@ -16,7 +16,7 @@ metadata:
 policy first, every time: it changes, and the version you remember may not
 be current.
 
-Stamp: put `<!-- generated-by: freshflow-engineering-challenge/review@0.1.0 -->` as the first
+Stamp: put `<!-- generated-by: freshflow-engineering-challenge/review@0.2.0 -->` as the first
 line of `review.md`.
 
 ## 0. Orient
@@ -76,8 +76,15 @@ Pass 4 (mutations) is the expensive one, and the one that matters most:
 
 Use exactly the format in `REVIEW-POLICY.md` → "The report".
 
-- **Findings** carry a severity, `file:line`, what is wrong, and either
-  "needs rework: <minimal fix>" or "worth a look".
+- **Findings** carry a severity, `file:line`, what is wrong, and one of:
+  - "Needs rework: <minimal fix>" (mechanical: the spec, the plan or a test
+    determines the fix);
+  - "Needs decision: <the choice>" (the fix picks between behaviours, or
+    changes what the spec or plan says);
+  - "Worth a look".
+
+  When unsure, write "Needs decision:". A wrong "Needs rework:" lets an
+  auto run decide for the owner.
 - **Not checked** is honest and specific: untested paths, behaviour that
   depends on a live model or external API, mutants you didn't run and why.
   An empty Not-checked section is almost always wrong.
@@ -90,13 +97,21 @@ Use exactly the format in `REVIEW-POLICY.md` → "The report".
   - When `owed`: the `## Live check` section gives steps the owner can follow
     without asking: the exact command, the input or fixture, what to do, and
     what they should see.
-  - When `not-needed`: one line saying why.
+  - When `not-needed`: one line saying why. The one exception the policy
+    allows ("When an end-to-end suite stands in") needs your own passing run
+    of the suite, with the scenario named.
   - If you ran the thing yourself, list what you saw under "Verified myself".
     That never replaces the owner's check, and you never write
-    `live_checked:`.
-- **`sampled:`** count the attested reviews in `intents/*/review.md`. If
-  this is the 5th, 10th, … attested change, set `sampled: yes` and tell the
-  user a post-merge full read is due.
+    `live_checked:` unless the owner asks you to, after running the check
+    themselves.
+- **`run:`** `auto` when `/auto` called this review (its brief says so),
+  otherwise `manual`.
+- **`sampled:`** run `npm run sdlc:scan -- --sample-due <run> --exclude <id>`
+  (this review's run kind and intent id). It counts the attested reviews of
+  that run kind in `intents/*/review.md`, leaving this intent out: every 5th
+  attested manual change and every 3rd attested auto-run change is due.
+  When it prints `sampled: yes`, and only if the verdict is `attest`, set
+  `sampled: yes` and tell the user a post-merge full read is due.
 
 Write nothing but `review.md`. The implementer sets `status: in-review`. If
 the status is still something else, say so in the report rather than fixing
@@ -116,5 +131,6 @@ Give one short block:
 An owed live check comes before the merge: "do the live check, record
 `live_checked:`, then merge".
 
-If they ask you to merge, apply `REVIEW-POLICY.md` → "Merging": its
-preconditions, then `verify` on `main`, then the bookkeeping.
+If they ask you to merge, use `/ship <id>`, which applies
+`REVIEW-POLICY.md` → "Merging": its preconditions, then `verify` on `main`,
+then the bookkeeping.
