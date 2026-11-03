@@ -6,21 +6,19 @@ The coordinator view. Each item's detail lives in `intents/<id>-<slug>/`
 ## Snapshot
 
 - 2026-11-03: repository created with the AI-native SDLC kit
-  (ai-sdlc-kit). There is no product code yet. Stack: undecided.
+  (ai-sdlc-kit).
+- 2026-11-03: §1 merged. A FastAPI service in `src/freshflow/` loads the
+  four CSVs through tested cleaning rules and serves recommendations per
+  store and ordering day (Python 3.12, uv, Docker).
 
 ## Queue
 
 | Item | Type · status |
 | --- | --- |
-| [§1](intents/1-order-recommendations-service/) Stack, skeleton and the order-recommendations service | feature · accepted |
 | [§2](intents/2-sdlc-kit-0-3/) Bring the SDLC kit up to ai-sdlc-kit 0.3.0 | refactor · accepted |
 
 ## Backlog
 
-- §1: choose the stack and build the project skeleton. Extend `npm run
-  verify` with build, lint and test. Write `CLAUDE.md` → "Architecture".
-  Narrow `CORE_CODE`. Name the live-check and Reviewed-tier paths. Start it
-  with `/intent --feature`.
 - Later: parallel sessions (a worktree and a session per intent) (`spawn`, `sessions`)
   once more than one intent runs at a time.
 - Later: revisit the interim gate-recording rule in `intents/README.md`
@@ -30,3 +28,4 @@ The coordinator view. Each item's detail lives in `intents/<id>-<slug>/`
 
 | Item | Merged |
 | --- | --- |
+| [§1](intents/1-order-recommendations-service/) Stack, skeleton and the order-recommendations service | 2026-11-03 · 99e87e8 |
