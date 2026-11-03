@@ -10,3 +10,12 @@ dist/
 
 # Per-worktree session brief.
 CLAUDE.local.md
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# The brief as received (untracked input)
+engineering-challenge.zip
