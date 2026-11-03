@@ -91,3 +91,41 @@ this line is the implementer's to edit. -->
 - `npm run verify`: 254 tests, 254 pass, 0 fail (5m49s).
 - Open: subtask 4 (merge with §1 once it ships), then `/review`.
   Status stays `in-progress` until then.
+
+### 2026-11-03 — subtask 4: merge `main` (§1 shipped) into the branch (coordinator)
+- `git merge main` at `f74bacd`. Five conflicts were resolved by hand, file
+  by file, keeping §1's product facts in 0.3.0's wording:
+  - `package.json`: 0.3.0's `queue`, `spawn`, `sessions` and `ship` scripts,
+    plus §1's `verify` (kit and `verify:py`) and `verify:py`. Adds
+    `"setup:worktree": "uv sync"` as subtask 4 says, since §1's stack is
+    uv-managed Python.
+  - `CLAUDE.md`: §1's Architecture section (module table, conventions,
+    wiring) in place of 0.3.0's "§1 writes this" placeholder list, plus a
+    `setup:worktree` line. The Parallel-sessions paragraph now says
+    `setup:worktree` is `uv sync` instead of "§1 defines it".
+  - `README.md`: §1's product README, with 0.3.0's pointers to
+    `OVERVIEW.md` and `npm run queue` in the intro.
+  - `REVIEW-POLICY.md`: the Reviewed-tier row combines 0.3.0's enforcement
+    list (`ship-lib.mjs`, `ship.mjs`, `session-event.mjs`) with §1's named
+    "by meaning" paths.
+  - `plan.md`: deleted (0.3.0). `main`'s §1 Shipped and snapshot edits went
+    into `OVERVIEW.md`'s Snapshot. `npm run queue` now lists §1 as shipped
+    at `99e87e8` and reads its old-style gate comments correctly.
+- Auto-merged and checked: `scripts/intent-check-lib.mjs` keeps §1's
+  narrowed `CORE_CODE`. Live-check rule 1 in `REVIEW-POLICY.md` keeps §1's
+  runtime paths.
+- **Diverged:** `scripts/ship.test.mjs:255-266`. The test "stops on a ROUTE
+  that review.md does not explain" used `src/x18.txt` and `src/x19.txt` as
+  stand-in core code. Under §1's narrowed `CORE_CODE` they are no longer
+  core, so the check reported PASS and the test failed. It is re-pointed to
+  `src/freshflow/ingest.py` and `flags.py`, the same fix §1 made to two
+  tests in `intent-check-lib.test.mjs`. This is a kit test file, so the
+  Reviewed tier applies.
+- Also fixed: the stale "language-neutral until §1" sentence in
+  `intents/README.md` (§1 review round 1, finding 12).
+  `docs/sdlc-grid.md` still describes the pre-§1 state; `/grid` refreshes
+  it.
+- `npm run verify`: kit 256/256, ruff clean, pytest 122 passed.
+  `npm run queue`: §1 shipped, §2 in flight.
+- Next: `/review` (subtask 5). The live check is owed by rule 2
+  (`.claude/settings.json`).

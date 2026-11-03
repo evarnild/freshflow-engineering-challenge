@@ -18,6 +18,10 @@ status.
 - 2026-11-03: repository created with the AI-native SDLC kit
   (ai-sdlc-kit 0.2.0). The brief and the four CSVs arrived as
   `engineering-challenge.zip`.
-- 2026-11-03: §1 (stack, skeleton and the order-recommendations service)
-  in flight on its branch; §2 brings the kit to 0.3.0 and merges after §1.
-  `npm run queue` has the current state.
+- 2026-11-03: §1 merged (`99e87e8`). A FastAPI service in `src/freshflow/`
+  loads the four CSVs through tested cleaning rules and serves
+  recommendations per store and ordering day (Python 3.12, uv, Docker).
+  `main` is public at https://github.com/evarnild/freshflow-engineering-challenge.
+- 2026-11-03: §2 brings the kit to 0.3.0 (generated queue, `spawn`,
+  `sessions`, `ship`), merged with §1's wiring. `npm run queue` has the
+  current state.

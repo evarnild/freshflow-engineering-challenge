@@ -142,15 +142,15 @@ function unquote(v) {
 }
 
 // Path rules. The stack is not chosen yet (§1 decides it), so these are
-// deliberately language-neutral; §1 narrows CORE_CODE to the modules whose
-// mistakes cost most, for example a domain or engine module.
+// language-neutral apart from CORE_CODE, which §1 narrowed to the pure modules
+// whose mistakes cost most (data cleaning, anomaly flags, the store-day view).
 const TEST_RE = [
   /\.(test|spec)\.[cm]?[jt]sx?$/, // JS/TS
   /(^|\/)test_[^/]+\.py$/, // pytest
   /_test\.(py|go)$/,
   /(^|\/)(tests?|__tests__)\//, // anything under a test directory
 ];
-export const CORE_CODE = [/^src\//];
+export const CORE_CODE = [/^src\/freshflow\/(ingest|flags|query)\.py$/];
 
 const isTest = (p) => TEST_RE.some((re) => re.test(p));
 const isCoreCode = (p) => CORE_CODE.some((re) => re.test(p)) && !isTest(p);

@@ -1,7 +1,7 @@
 id: 2
 slug: sdlc-kit-0-3
 type: refactor           # feature | fix | refactor | adjustment | experiment
-status: in-progress       # draft | accepted | in-progress | in-review | done | abandoned | deferred
+status: in-review        # draft | accepted | in-progress | in-review | done | abandoned | deferred
 title: Bring the SDLC kit up to ai-sdlc-kit 0.3.0
 review_tier: reviewed    # kit files: REVIEW-POLICY.md, skills, agents, hooks
 # Gates: the date you passed each one (a bare date), or `<date> by-agent` when

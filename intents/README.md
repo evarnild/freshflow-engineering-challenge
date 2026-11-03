@@ -54,8 +54,8 @@ test file shows as lines deleted from the old path, so a refactor that does
 it routes. Say so in `review.md`.
 
 What counts as core code, as a test, and as code at all is defined at the
-top of `scripts/intent-check-lib.mjs`. The rules are language-neutral until
-§1 picks the stack and narrows `CORE_CODE`.
+top of `scripts/intent-check-lib.mjs`. Since §1, `CORE_CODE` is the pure
+service modules `src/freshflow/{ingest,flags,query}.py`.
 
 A fix whose defect came from an earlier intent's change records that in
 `metadata.yml` as `follows_up: <id>`. That key is what lets
