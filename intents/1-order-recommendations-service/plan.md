@@ -196,3 +196,33 @@ Divergences from the plan:
   them as float.
 - A missing multipart field gives FastAPI's own 422 (naming the field), not
   our `LoadError` wording.
+
+### 2026-11-03: review round 1 rework (implementer)
+
+Commits (review.md itself was committed first, unedited, as "§1: review round 1 (rework)"):
+- "findings 1, 5, 6, 13, 15, 17": `csv.Error` now becomes `LoadError("not valid
+  CSV")` (422 on POST, empty-but-up on autoload); autoload also catches
+  `OSError`; strict `YYYY-MM-DD` day (pattern plus `date.fromisoformat`, 422);
+  per-file upload cap `MAX_UPLOAD_BYTES` (default 50 MB); the `freshflow`
+  logger gets a stderr handler at INFO so the autoload line shows in container
+  logs; tests for autoload switch, partial directory, UTF-8 detail, and
+  nan/inf quantities (already rejected as `bad_number`, now tested) and the BOM
+  (literal replaced by the `"\ufeff"` escape).
+- "findings 2, 3, 4, 7, 8, 9": tests only. Outlier median fixtures that change
+  the verdict, varying-series and per-store `inventory_suspect` cases, AC5
+  asserts `rows_accepted == 25000` and `missing_catalog_entry == 606`, a
+  synthetic flag-tally test, catalog prices that differ from orderable ones,
+  `"VEGETABLES "` and empty tags, and two kit tests for `CORE_CODE` (`flags.py`
+  is core, `api.py` and look-alike paths are not). Checked by hand against two
+  mutants (`q >= 0`, median to max): both now fail.
+- "findings 10, 11, 14": README numbers (509 after dedupe, medians 18 and 9,
+  store_b 1009 in the suspect list, what a known store means), plus the new
+  cap and 413 documented.
+
+Needs a spec/plan note: the upload cap answers 413, which spec B3 (422 only)
+does not list; left for the owner to fold into the spec. Skipped: 12 (stale
+text in `intents/README.md` and `docs/sdlc-grid.md`, `/grid` refreshes it),
+16 (float quantities), 18 (image digests), 19 (hatchling in the dependency
+table). The other edge gaps in 13 (`_day` whitespace, loose ISO regex,
+`bad_bool`, blank rows, header strip, whitespace-only extra field) were not
+touched.
