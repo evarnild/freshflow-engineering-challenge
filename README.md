@@ -34,8 +34,8 @@ curl localhost:8000/data/report
 
 | Endpoint | What |
 | --- | --- |
-| `POST /data` | multipart upload with the fields `items`, `orderable_items`, `inventory`, `order_recommendations`. 200 returns the load report. 422 names the file and the problem; the previous dataset stays |
-| `GET /stores/{store_id}/recommendations?day=YYYY-MM-DD` | recommendations whose **ordering day** is `day`, sorted by item number. Store id is case and whitespace insensitive. 404 unknown store, 200 with an empty list when the store has nothing that day, 422 bad `day`, 503 before any data is loaded |
+| `POST /data` | multipart upload with the fields `items`, `orderable_items`, `inventory`, `order_recommendations`. 200 returns the load report. 422 names the file and the problem (including malformed CSV and non-UTF-8 bytes); 413 if a file exceeds the cap; the previous dataset stays |
+| `GET /stores/{store_id}/recommendations?day=YYYY-MM-DD` | recommendations whose **ordering day** is `day` (strict ISO date), sorted by item number. Store id is case and whitespace insensitive. A store is "known" if it has at least one valid recommendation on any day. 404 unknown store, 200 with an empty list when the store has nothing that day, 422 bad `day`, 503 before any data is loaded |
 | `GET /stores` | loaded stores with first and last ordering day |
 | `GET /data/report` | the last load report |
 | `GET /health` | liveness and whether data is loaded |
@@ -46,7 +46,8 @@ Each recommendation carries `item_number`, `name`, `category`, `is_bio`,
 the ordering day or null), prices, `profit_margin`, `tags` and `flags`.
 
 `DATA_DIR` (default `/app/data`) is where startup autoload looks. Set it empty
-to start with no data.
+to start with no data. `MAX_UPLOAD_BYTES` (default 52428800, 50 MB) caps each
+uploaded file; larger uploads get 413 and change nothing.
 
 ## Develop
 
@@ -72,13 +73,13 @@ under its code, with up to five example rows per drop code.
 | 240 orderable rows with a trailing empty field | ignored; a non-empty extra field drops the row | `extra_empty_field_ignored`, `extra_fields` |
 | short rows, unparseable numbers or booleans, empty store | dropped | `short_row`, `bad_number`, `bad_bool`, `bad_store` |
 | negative inventory | dropped (none in the sample) | `negative_inventory` |
-| 515 negative recommended quantities | served as 0, source value kept | flag `negative_quantity_clamped` |
+| 515 negative recommended quantities (509 after dedupe) | served as 0, source value kept | flag `negative_quantity_clamped` |
 | items 9901-9903 recommended (incl. all Sunday rows) but never orderable | recommendation dropped unless an orderable row exists for the same store, item, ordering day and delivery day | `not_orderable` |
 | item 1099 orderable and stocked, absent from `items.csv` | kept; name, category, `is_bio` are null | flag `missing_catalog_entry` |
 | 1,299 orderable rows with no price or margin | served as null | |
 | no inventory row for the store, item and day | inventory is null | flag `inventory_missing` |
-| item 1009 recommended at up to 1,939 against a median of about 15 | flagged, not changed | flag `quantity_outlier` |
-| items 1004, 1033, 1050 stocked in the thousands | flagged, not changed | flag `inventory_suspect` |
+| item 1009 recommended at up to 1,939 against non-zero medians of 18 (store_a) and 9 (store_b) | flagged, not changed | flag `quantity_outlier` |
+| items 1004, 1033, 1050 stocked in the thousands (store_b's item 1009 also trips the rule, 305 of the 1,523 flagged rows) | flagged, not changed | flag `inventory_suspect` |
 
 Flags are attached to each returned row in `flags`, and their totals appear in
 the report under `flags`.
