@@ -236,7 +236,10 @@ def _text(raw: str) -> str:
 def _read(name: str, text: str | None) -> tuple[list[str], list[list[str]]]:
     if text is None:
         raise LoadError(name, "file is missing")
-    rows = [r for r in csv.reader(io.StringIO(text.lstrip("﻿"), newline="")) if r]
+    try:
+        rows = [r for r in csv.reader(io.StringIO(text.lstrip("﻿"), newline="")) if r]
+    except csv.Error as e:
+        raise LoadError(name, f"not valid CSV: {e}") from None
     if not rows:
         raise LoadError(name, "file is empty")
     header = [h.strip() for h in rows[0]]

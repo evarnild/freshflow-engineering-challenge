@@ -10,7 +10,7 @@ from datetime import date
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 from freshflow.ingest import FILE_COLUMNS, Dataset, LoadError, LoadReport, load_dataset
@@ -19,6 +19,23 @@ from freshflow.query import recommendations_for, stores
 log = logging.getLogger("freshflow")
 
 DEFAULT_DATA_DIR = "/app/data"
+DEFAULT_MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # per file; override with MAX_UPLOAD_BYTES
+
+
+def _configure_logging() -> None:
+    """Make the freshflow logger visible in container logs (uvicorn only configures its own)."""
+    if not log.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+        log.addHandler(handler)
+    log.setLevel(logging.INFO)
+
+
+def _max_upload_bytes() -> int:
+    try:
+        return int(os.environ.get("MAX_UPLOAD_BYTES", DEFAULT_MAX_UPLOAD_BYTES))
+    except ValueError:
+        return DEFAULT_MAX_UPLOAD_BYTES
 
 
 class _Holder:
@@ -58,7 +75,7 @@ def _autoload(holder: _Holder) -> None:
             texts[name] = _decode(name, path.read_bytes())
         holder.swap(*load_dataset(texts))
         log.info("autoloaded dataset from %s", data_dir)
-    except LoadError as e:
+    except (LoadError, OSError) as e:
         log.warning("autoload failed: %s", e)
 
 
@@ -92,6 +109,7 @@ class StoreOut(BaseModel):
 
 
 def create_app() -> FastAPI:
+    _configure_logging()
     holder = _Holder()
 
     @asynccontextmanager
@@ -126,8 +144,14 @@ def create_app() -> FastAPI:
             "inventory": inventory,
             "order_recommendations": order_recommendations,
         }
+        limit = _max_upload_bytes()
+        texts: dict[str, str] = {}
         try:
-            texts = {n: _decode(n, u.file.read()) for n, u in uploads.items()}
+            for n, u in uploads.items():
+                raw = u.file.read(limit + 1)
+                if len(raw) > limit:
+                    raise HTTPException(413, f"{n}: larger than {limit} bytes")
+                texts[n] = _decode(n, raw)
             dataset, report = load_dataset(texts)
         except LoadError as e:
             raise HTTPException(422, f"{e.file}: {e.message}") from e
@@ -145,14 +169,20 @@ def create_app() -> FastAPI:
         return stores(current()[0])
 
     @app.get("/stores/{store_id}/recommendations", response_model=RecommendationsOut)
-    def get_recommendations(store_id: str, day: date) -> dict[str, Any]:
+    def get_recommendations(
+        store_id: str, day: Annotated[str, Query(pattern=r"^\d{4}-\d{2}-\d{2}$")]
+    ) -> dict[str, Any]:
         """Recommendations whose ordering day is `day`, sorted by item number."""
+        try:
+            day_ = date.fromisoformat(day)
+        except ValueError:
+            raise HTTPException(422, "day must be a valid YYYY-MM-DD date") from None
         dataset, _ = current()
         store = store_id.strip().lower()
         if store not in {s["store_id"] for s in stores(dataset)}:
             raise HTTPException(404, f"unknown store: {store}")
-        views = recommendations_for(dataset, store, day)
-        return {"store_id": store, "day": day, "count": len(views), "recommendations": views}
+        views = recommendations_for(dataset, store, day_)
+        return {"store_id": store, "day": day_, "count": len(views), "recommendations": views}
 
     return app
 

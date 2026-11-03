@@ -253,3 +253,30 @@ def test_report_serialises_to_plain_dict():
     d = rep.to_dict()
     assert d["files"]["items"]["rows_read"] == 1
     assert "flags" in d
+
+
+def test_oversized_field_is_a_load_error_not_a_csv_error():
+    f = make_files()
+    f["items"] = "item_number,name,category,is_bio,purchase_price,suggested_retail_price\n" + (
+        "1001," + "x" * 200_000 + ",fruits,False,1,2\n"
+    )
+    with pytest.raises(LoadError) as e:
+        load_dataset(f)
+    assert e.value.file == "items"
+    assert "not valid CSV" in e.value.message
+
+
+@pytest.mark.parametrize("bad", ["nan", "inf", "-inf"])
+def test_non_finite_quantities_drop_the_row(bad):
+    ds, rep = load_dataset(make_files(inventory=[inv_row(qty=bad)], recs=[rec_row(qty=bad)]))
+    assert ds.inventory == {}
+    assert ds.recommendations == {}
+    assert counts(rep, "inventory")["bad_number"] == 1
+    assert counts(rep, "order_recommendations")["bad_number"] == 1
+
+
+def test_utf8_bom_on_the_first_header_is_ignored():
+    f = make_files()
+    f["inventory"] = "\ufeff" + f["inventory"]
+    ds, _ = load_dataset(f)
+    assert len(ds.inventory) == 1

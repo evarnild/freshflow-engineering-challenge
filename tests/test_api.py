@@ -140,3 +140,105 @@ def test_empty_data_dir_variable_disables_autoload(monkeypatch):
     monkeypatch.setenv("DATA_DIR", "")
     with TestClient(create_app()) as c:
         assert c.get("/health").json()["data_loaded"] is False
+
+
+# ---- review round 1
+
+
+def write_dataset(path, **kw):
+    for name, text in make_files(**kw).items():
+        (path / f"{name}.csv").write_text(text, encoding="utf-8")
+
+
+def test_oversized_csv_field_is_422_on_post_and_leaves_service_up(client):
+    files = make_files()
+    files["items"] = "item_number,name\n1001," + "x" * 200_000 + "\n"
+    r = upload(client, files)
+    assert r.status_code == 422
+    assert "items" in r.text and "not valid CSV" in r.text
+
+
+def test_autoload_with_oversized_field_leaves_service_empty(tmp_path, monkeypatch, caplog):
+    write_dataset(tmp_path)
+    (tmp_path / "items.csv").write_text("a,b\n1," + "x" * 200_000 + "\n", encoding="utf-8")
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    with caplog.at_level("INFO", logger="freshflow"), TestClient(create_app()) as c:
+        assert c.get("/health").json()["data_loaded"] is False
+    assert "autoload failed" in caplog.text
+
+
+def test_autoload_survives_os_error(tmp_path, monkeypatch, caplog):
+    write_dataset(tmp_path)
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+
+    def boom(self):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr("pathlib.Path.read_bytes", boom)
+    with caplog.at_level("INFO", logger="freshflow"), TestClient(create_app()) as c:
+        assert c.get("/health").json()["data_loaded"] is False
+    assert "autoload failed" in caplog.text
+
+
+def test_empty_data_dir_disables_even_when_default_dir_has_data(tmp_path, monkeypatch, caplog):
+    write_dataset(tmp_path)
+    monkeypatch.setattr("freshflow.api.DEFAULT_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("DATA_DIR", "")
+    with caplog.at_level("INFO", logger="freshflow"), TestClient(create_app()) as c:
+        assert c.get("/health").json()["data_loaded"] is False
+    assert "autoload disabled" in caplog.text
+
+
+def test_unset_data_dir_uses_the_default(tmp_path, monkeypatch):
+    write_dataset(tmp_path)
+    monkeypatch.setattr("freshflow.api.DEFAULT_DATA_DIR", str(tmp_path))
+    monkeypatch.delenv("DATA_DIR", raising=False)
+    with TestClient(create_app()) as c:
+        assert c.get("/health").json()["data_loaded"] is True
+
+
+def test_autoload_with_only_some_files_is_skipped_and_logged(tmp_path, monkeypatch, caplog):
+    write_dataset(tmp_path)
+    (tmp_path / "inventory.csv").unlink()
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    with caplog.at_level("INFO", logger="freshflow"), TestClient(create_app()) as c:
+        assert c.get("/health").json()["data_loaded"] is False
+    assert "autoload skipped" in caplog.text
+    assert "inventory.csv not found" in caplog.text
+
+
+def test_successful_autoload_is_logged_at_info(tmp_path, monkeypatch, caplog):
+    write_dataset(tmp_path)
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    with caplog.at_level("INFO", logger="freshflow"), TestClient(create_app()) as c:
+        assert c.get("/health").json()["data_loaded"] is True
+    assert "autoloaded dataset" in caplog.text
+
+
+def test_freshflow_logger_has_a_handler_at_info():
+    import logging
+
+    create_app()
+    lg = logging.getLogger("freshflow")
+    assert lg.handlers and lg.level == logging.INFO
+
+
+def test_non_utf8_upload_detail_says_not_valid_utf8(loaded):
+    files = {k: (f"{k}.csv", v.encode(), "text/csv") for k, v in make_files().items()}
+    files["inventory"] = ("inventory.csv", "caf\u00e9".encode("latin-1"), "text/csv")
+    r = loaded.post("/data", files=files)
+    assert r.status_code == 422
+    assert "inventory" in r.text and "not valid UTF-8" in r.text
+
+
+@pytest.mark.parametrize("day", ["1709596800", "2024-03-05T00:00:00", "2024-3-5", "20240305"])
+def test_day_must_be_strict_iso(loaded, day):
+    assert loaded.get(URL, params={"day": day}).status_code == 422
+
+
+def test_upload_over_the_size_cap_is_413_and_keeps_old_data(loaded, monkeypatch):
+    monkeypatch.setenv("MAX_UPLOAD_BYTES", "50")
+    r = upload(loaded, make_files())
+    assert r.status_code == 413
+    monkeypatch.delenv("MAX_UPLOAD_BYTES")
+    assert loaded.get(URL, params={"day": "2024-03-05"}).json()["count"] == 1
