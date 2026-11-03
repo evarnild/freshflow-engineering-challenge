@@ -7,7 +7,8 @@ looks wrong, and never changes a number it cannot explain.
 Built with the AI-native SDLC (`sdlc.md`, `intents/`): the intent, spec and plan
 for this service are in `intents/1-order-recommendations-service/`.
 [`OVERVIEW.md`](OVERVIEW.md) has the snapshot, and `npm run queue` lists
-what is queued.
+what is queued. The presentation of the work is
+[`docs/presentation.pdf`](docs/presentation.pdf) (13 slides).
 
 ## Run it
 
