@@ -9,7 +9,7 @@ review_tier: reviewed    # kit files: REVIEW-POLICY.md, skills, agents, hooks
 intent_accepted: 2026-11-03 by-agent    # owner's yes, 2026-11-03
 spec_accepted:           # feature only
 plan_approved: 2026-11-03 by-agent      # owner's yes, 2026-11-03
-live_checked:            # only when review.md says live-check: owed — the day you ran it yourself
+live_checked: 2026-11-03  # only when review.md says live-check: owed — the day you ran it yourself
 merged:                  # merge commit hash
 follows_up:              # fix only: id of the intent whose change caused this defect, if known
 links:
