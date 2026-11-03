@@ -79,3 +79,15 @@ and must stay green without edits.
 <!-- The implementer appends here, one entry per phase: date, commits, what
 shipped, test counts, anything that diverged from the plan. Nothing above
 this line is the implementer's to edit. -->
+
+### 2026-11-03 — subtasks 1–3 (coordinator)
+
+- Worktree `../freshflow-engineering-challenge-wt/2-sdlc-kit-0-3` on
+  `refactor/2-sdlc-kit-0-3` from `main` at `25c5a66`.
+- `26c997f`: every 0.2.0 kit file replaced by its 0.3.0 render (`f7cdeaa`);
+  `plan.md` deleted (no 0.3.0 counterpart); `OVERVIEW.md` added with a
+  snapshot naming §1 and §2. §2's own gates rewritten to the `<date>
+  by-agent` form; §1's folder untouched.
+- `npm run verify`: 254 tests, 254 pass, 0 fail (5m49s).
+- Open: subtask 4 (merge with §1 once it ships), then `/review`.
+  Status stays `in-progress` until then.
